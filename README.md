@@ -36,7 +36,16 @@ docker compose up -d --build
 
 4. Send `/start` to your bot. The first chat that does becomes the owner (or set `OWNER_CHAT_ID`).
 
-Without Docker: `pip install -r requirements.txt && python -m ocity`.
+Without Docker: `pip install -r requirements.txt && python -m ocity`. The bot reads `.env`
+from the folder it runs in, so this works the same on Windows:
+
+```bat
+cd C:\ocitytasks
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+copy .env.example .env
+.venv\Scripts\python -m ocity
+```
 
 All times are in `TIMEZONE` (default Asia/Tehran). Set `QUIET_WINDOWS=18:30-20:00`
 to keep it silent during busy shop hours. Data lives in `data/ocity.db` (SQLite).

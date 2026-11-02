@@ -48,7 +48,21 @@ class Config:
         return bool(self.anthropic_api_key)
 
 
+def load_env_file(path: str = ".env") -> None:
+    """Read KEY=value lines from .env into the environment (existing variables win)."""
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8-sig") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
 def load() -> Config:
+    load_env_file()
     env = os.environ.get
     owner = env("OWNER_CHAT_ID", "").strip()
     return Config(
