@@ -26,21 +26,42 @@ SPRINT_DAYS = 3
 PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
 
+def _parse_row(line: str) -> ContentItem | None:
+    cells = [c.strip() for c in line.translate(PERSIAN_DIGITS).strip().lstrip("#").strip().strip("|").split("|")]
+    if len(cells) < 4:
+        return None
+    try:
+        day = date.fromisoformat(cells[0].replace("/", "-"))
+    except ValueError:
+        return None  # header or separator row
+    return ContentItem(
+        date=day.isoformat(), business=cells[1], title=cells[2], format=cells[3],
+        prep=cells[4] if len(cells) > 4 and cells[4] else None,
+    )
+
+
 def parse_plan_table(text: str) -> list[ContentItem]:
-    """Read "date | business | title | format | prep" lines; other lines are ignored."""
-    items = []
+    """Read "date | business | title | format | prep" lines.
+
+    Any lines under an item line, up to the next item, are that item's script
+    (shot list, voice-over, caption...). Lines before the first item are ignored.
+    """
+    items: list[ContentItem] = []
+    script: list[str] = []
+
+    def close() -> None:
+        if items and script:
+            items[-1].script = "\n".join(script).strip() or None
+        script.clear()
+
     for line in text.splitlines():
-        cells = [c.strip() for c in line.translate(PERSIAN_DIGITS).strip().strip("|").split("|")]
-        if len(cells) < 4:
-            continue
-        try:
-            day = date.fromisoformat(cells[0].replace("/", "-"))
-        except ValueError:
-            continue  # header or separator row
-        items.append(ContentItem(
-            date=day.isoformat(), business=cells[1], title=cells[2], format=cells[3],
-            prep=cells[4] if len(cells) > 4 and cells[4] else None,
-        ))
+        item = _parse_row(line)
+        if item:
+            close()
+            items.append(item)
+        elif items:
+            script.append(line.rstrip())
+    close()
     return items
 
 
@@ -177,12 +198,22 @@ class CityHall:
                 "2026-11-05 | کراکس | راهنمای سایز | ریل | دمپایی کلاسیک مشکی و سفید"
             )
         added = []
+        today = self.local(now).date()
         for item in items:
             publish = date.fromisoformat(item.date)
             title = f"انتشار {item.format}: {item.title} ({item.business})"
-            added.append(self.add(title, "media", "today", now=now, kind="publish", due_date=item.date, priority="high"))
+            added.append(self.add(
+                title, "media", "today", now=now, kind="publish", due_date=item.date,
+                priority="high", notes=item.script,
+            ))
+            if item.script:
+                film_day = max(publish - timedelta(days=1), today)
+                added.append(self.add(
+                    f"ضبط «{item.title}» ({item.format})", "media", "today", now=now,
+                    kind="filming", due_date=film_day.isoformat(), notes=item.script,
+                ))
             if item.prep:
-                prep_day = max(publish - timedelta(days=2), self.local(now).date())
+                prep_day = max(publish - timedelta(days=2), today)
                 added.append(self.add(
                     f"آماده‌سازی برای «{item.title}»: {item.prep}", "media", "today", now=now,
                     kind="content_prep", due_date=prep_day.isoformat(), delegated=True,
@@ -237,6 +268,7 @@ class CityHall:
         if local.time() >= self.cfg.morning_time and self.db.get_state("last_morning") != today:
             self.db.set_state("last_morning", today)
             out.append(Outgoing(self.morning_brief(now)))
+            out.extend(self.todays_scripts(now))
 
         for task in self.db.tasks_due_for_nudge(now):
             out.append(Outgoing(self.nudge_text(task, now), task_id=task.id))
@@ -251,6 +283,19 @@ class CityHall:
             self.db.set_state("last_evening", today)
             out.append(Outgoing(self.evening_wrap(now)))
         return out
+
+    def todays_scripts(self, now: datetime) -> list[Outgoing]:
+        """On the day a filming or publish task is due, hand over its script."""
+        today = self.local(now).date().isoformat()
+        return [
+            Outgoing(self.script_text(t), task_id=t.id)
+            for t in self.db.open_tasks()
+            if t.notes and t.kind in ("filming", "publish") and t.due_date and t.due_date <= today
+        ]
+
+    def script_text(self, task: Task) -> str:
+        body = task.notes or "برای این کار سناریویی ثبت نشده."
+        return f"📝 {task.title}\n\n{body}"[:4000]
 
     def checkins(self, now: datetime) -> list[Outgoing]:
         """Midday/evening sweep over today's tasks that have no time of their own yet."""
@@ -277,7 +322,10 @@ class CityHall:
     def nudge_text(self, task: Task, now: datetime) -> str:
         overdue = task.due_date and task.due_date < self.local(now).date().isoformat()
         prefix = "⏰ عقب افتاده: " if overdue else ("🔁 دوباره: " if task.nudge_count else "")
-        return f"{prefix}{label(task.building)}\n{task.title}\nرسیدی؟"
+        text = f"{prefix}{label(task.building)}\n{task.title}\nرسیدی؟"
+        if task.notes:
+            text += f"\n\n📝 {task.notes}"
+        return text[:4000]
 
     def mission_followups(self, now: datetime) -> list[Outgoing]:
         out = []
@@ -405,5 +453,9 @@ class CityHall:
             for t in items:
                 mark = "⏰ " if t.due_date and t.due_date < today else ""
                 staff = " 👥" if t.delegated else ""
-                lines.append(f"{mark}#{t.id} {BUILDINGS[t.building].emoji} {t.title}{staff}")
-        return "\n".join(lines).strip() or "هیچ کار بازی نداری 🎉"
+                note = " 📝" if t.notes else ""
+                lines.append(f"{mark}#{t.id} {BUILDINGS[t.building].emoji} {t.title}{staff}{note}")
+        text = "\n".join(lines).strip() or "هیچ کار بازی نداری 🎉"
+        if any(t.notes for t in open_):
+            text += "\n\n📝 یعنی سناریو داره: /script شماره"
+        return text

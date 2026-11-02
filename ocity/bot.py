@@ -37,7 +37,8 @@ HELP = """🏛 شهرداری OCity
 /tasks همه کارهای باز
 /city وضعیت شهر و طبقه‌ها
 /profile چیزهایی که از روال کارت یاد گرفتم
-/plan برنامه محتوا رو بعد از این دستور بفرست
+/plan برنامه محتوا رو بعد از این دستور بفرست (متن یا فایل txt)
+/script 12 سناریوی کار شماره ۱۲
 /sprint شروع دوباره اسپرینت محتوا"""
 
 
@@ -144,10 +145,34 @@ class Bot:
         else:
             self.awaiting_plan = True
             await update.message.reply_text(
-                "برنامه محتوا رو همینجا بفرست. هر محتوا یه خط:\n"
+                "برنامه محتوا رو همینجا بفرست، یا اگه طولانیه به‌صورت فایل txt. هر محتوا یه خط:\n"
                 "2026-11-05 | کراکس | راهنمای سایز | ریل | کلاسیک مشکی و سفید\n"
-                "(تاریخ | بیزنس | عنوان | فرمت | آماده‌سازی)"
+                "(تاریخ | بیزنس | عنوان | فرمت | آماده‌سازی)\n\n"
+                "هر چی زیر هر خط بنویسی تا خط بعدی، سناریوی همون محتواست و روز ضبطش بهت می‌دم."
             )
+
+    async def script(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self.is_owner(update):
+            return
+        arg = update.message.text.partition(" ")[2].strip().lstrip("#")
+        task = self.db.get_task(int(arg)) if arg.isdigit() else None
+        if task is None:
+            await update.message.reply_text("شماره کار رو بعد از دستور بنویس، مثلاً /script 12 (شماره‌ها توی /tasks هست).")
+            return
+        await update.message.reply_text(self.city.script_text(task), reply_markup=task_keyboard(task.id))
+
+    async def document(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """A .txt or .md file is a content plan handoff."""
+        if not self.is_owner(update):
+            return
+        doc = update.message.document
+        name = (doc.file_name or "").lower()
+        if not name.endswith((".txt", ".md")):
+            await update.message.reply_text("فعلاً فقط فایل txt یا md رو می‌تونم به‌عنوان برنامه محتوا بخونم.")
+            return
+        data = await (await doc.get_file()).download_as_bytearray()
+        self.awaiting_plan = False
+        await self.import_plan(update, bytes(data).decode("utf-8-sig", errors="replace"))
 
     async def sprint(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
@@ -260,8 +285,10 @@ def main() -> None:
     app.add_handler(CommandHandler("profile", bot.profile))
     app.add_handler(CommandHandler("plan", bot.plan))
     app.add_handler(CommandHandler("sprint", bot.sprint))
+    app.add_handler(CommandHandler("script", bot.script))
     app.add_handler(CallbackQueryHandler(bot.button))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, bot.voice))
+    app.add_handler(MessageHandler(filters.Document.ALL, bot.document))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bot.text))
     app.job_queue.run_repeating(bot.tick, interval=60, first=5)
     log.info("City Hall is running (AI %s)", "on" if cfg.ai_enabled else "off")

@@ -17,6 +17,10 @@ follows up on tasks at the right moment, and learns how you work.
   two days before. One line per piece works without Claude:
   `2026-11-05 | Crocs | size guide | reel | black and white classics` (date | business | title | format | prep).
   With a Claude key it also reads free-form plans.
+  Lines under an item, up to the next item, are its script: the bot hands it over the day before
+  publishing as a filming task, and on the publish day. A long plan can be sent as a `.txt` file.
+  `docs/media-hub-claude-project.md` sets up a Claude project that writes this handoff each week.
+- **/script 12**: show the script of task 12.
 - **Evening wrap-up** (23:00): what got built, unfinished tasks move to tomorrow.
 - **Learning**: every task logs when it was planned, when it was really done, how often it was pushed back and how long it took. `/profile` shows what it learned; tell it rules like «جمعه‌ها کار سایت نمی‌کنم».
 - **The city**: each ✅ adds a floor to its building; overdue work puts scaffolding on it (`/city`).

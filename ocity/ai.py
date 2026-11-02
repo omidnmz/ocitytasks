@@ -69,6 +69,9 @@ class ContentItem(BaseModel):
     title: str
     format: str = Field(description="reel, story, post, motion, ...")
     prep: Optional[str] = Field(description="Products or things to prepare before filming")
+    script: Optional[str] = Field(
+        default=None, description="The script, shot list and caption for this piece, copied as written"
+    )
 
 
 class ContentPlan(BaseModel):

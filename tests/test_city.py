@@ -157,3 +157,44 @@ def test_plan_table_imports_without_ai(city):
 def test_unreadable_plan_without_ai_explains_format(city):
     result = city.import_content_plan("this week film the clogs", at(2, 10))
     assert not result.added and "|" in result.reply
+
+
+HANDOFF = """# Media Hub handoff, week 1
+### 2026-11-05 | کراکس | راهنمای سایز | ریل | کلاسیک مشکی و سفید
+شات ۱: دیوار رنگ‌ها
+شات ۲: پوشیدن سایز M9
+کپشن: سایزت رو با ما پیدا کن
+
+### 2026-11-06 | SmartO | معرفی پنل | موشن |
+"""
+
+
+def test_handoff_scripts_become_filming_tasks_and_arrive_on_the_day(city):
+    result = city.import_content_plan(HANDOFF, at(2, 10))
+    filming = [t for t in result.added if t.kind == "filming"]
+    assert len(filming) == 1
+    assert filming[0].due_date == "2026-11-04"
+    assert "شات ۲" in filming[0].notes and "کپشن" in filming[0].notes
+    smarto = [t for t in result.added if "معرفی پنل" in t.title]
+    assert len(smarto) == 1 and smarto[0].notes is None
+    # nothing on the 3rd, the script arrives with the morning brief on the 4th
+    assert not [m for m in city.tick(at(3, 10, 30)) if m.text.startswith("📝")]
+    scripts = [m for m in city.tick(at(4, 10, 30)) if m.text.startswith("📝")]
+    assert len(scripts) == 1 and scripts[0].task_id == filming[0].id
+
+
+def test_old_database_gets_notes_column(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL, building TEXT NOT NULL, "
+                 "board TEXT NOT NULL DEFAULT 'today', status TEXT NOT NULL DEFAULT 'open', priority TEXT NOT NULL DEFAULT 'normal', "
+                 "kind TEXT, due_date TEXT, due_time TEXT, next_nudge_at TEXT, nudge_count INTEGER NOT NULL DEFAULT 0, "
+                 "postpone_count INTEGER NOT NULL DEFAULT 0, estimate_min INTEGER, actual_min INTEGER, "
+                 "delegated INTEGER NOT NULL DEFAULT 0, mission_id INTEGER, step_order INTEGER, created_at TEXT NOT NULL, done_at TEXT)")
+    conn.execute("INSERT INTO tasks(title, building, created_at) VALUES('old', 'retail', '2026-11-01T00:00:00+00:00')")
+    conn.commit()
+    conn.close()
+    db = DB(str(path))
+    assert db.get_task(1).notes is None
+    assert db.add_task("new", "media", notes="script").notes == "script"
