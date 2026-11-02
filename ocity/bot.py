@@ -39,6 +39,7 @@ HELP = """🏛 شهرداری OCity
 /profile چیزهایی که از روال کارت یاد گرفتم
 /plan برنامه محتوا رو بعد از این دستور بفرست (متن یا فایل txt)
 /script 12 سناریوی کار شماره ۱۲
+/del 12 پاک کردن کار شماره ۱۲
 /sprint شروع دوباره اسپرینت محتوا"""
 
 
@@ -160,6 +161,21 @@ class Bot:
             await update.message.reply_text("شماره کار رو بعد از دستور بنویس، مثلاً /script 12 (شماره‌ها توی /tasks هست).")
             return
         await update.message.reply_text(self.city.script_text(task), reply_markup=task_keyboard(task.id))
+
+    async def delete(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self.is_owner(update):
+            return
+        ids = [int(a.lstrip("#")) for a in update.message.text.split()[1:] if a.lstrip("#").isdigit()]
+        removed = []
+        for task_id in ids:
+            task = self.db.get_task(task_id)
+            if task and task.status == "open":
+                self.city.drop(task_id, now_utc())
+                removed.append(f"#{task_id}")
+        if removed:
+            await update.message.reply_text("🗑 پاک شد: " + " ".join(removed))
+        else:
+            await update.message.reply_text("شماره کار رو بعد از دستور بنویس، مثلاً /del 12 15 (شماره‌ها توی /tasks هست).")
 
     async def document(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """A .txt or .md file is a content plan handoff."""
@@ -286,6 +302,7 @@ def main() -> None:
     app.add_handler(CommandHandler("plan", bot.plan))
     app.add_handler(CommandHandler("sprint", bot.sprint))
     app.add_handler(CommandHandler("script", bot.script))
+    app.add_handler(CommandHandler("del", bot.delete))
     app.add_handler(CallbackQueryHandler(bot.button))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, bot.voice))
     app.add_handler(MessageHandler(filters.Document.ALL, bot.document))

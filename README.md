@@ -20,7 +20,8 @@ follows up on tasks at the right moment, and learns how you work.
   Lines under an item, up to the next item, are its script: the bot hands it over the day before
   publishing as a filming task, and on the publish day. A long plan can be sent as a `.txt` file.
   `docs/media-hub-claude-project.md` sets up a Claude project that writes this handoff each week.
-- **/script 12**: show the script of task 12.
+- **/script 12**: show the script of task 12. **/del 12 15**: remove tasks 12 and 15.
+  Sending the same plan again updates its tasks instead of duplicating them.
 - **Evening wrap-up** (23:00): what got built, unfinished tasks move to tomorrow.
 - **Learning**: every task logs when it was planned, when it was really done, how often it was pushed back and how long it took. `/profile` shows what it learned; tell it rules like «جمعه‌ها کار سایت نمی‌کنم».
 - **The city**: each ✅ adds a floor to its building; overdue work puts scaffolding on it (`/city`).
