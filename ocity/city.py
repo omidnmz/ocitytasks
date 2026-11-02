@@ -199,25 +199,28 @@ class CityHall:
             )
         added = []
         today = self.local(now).date()
+        open_by_key = {(t.title, t.kind): t for t in self.db.open_tasks() if t.building == "media"}
+
+        def put(title: str, kind: str, due: date, **kw) -> None:
+            """Sending the same plan again updates its tasks instead of duplicating them."""
+            existing = open_by_key.get((title, kind))
+            if existing:
+                self.db.update_task(existing.id, due_date=due.isoformat(), notes=kw.get("notes"))
+                return
+            task = self.add(title, "media", "today", now=now, kind=kind, due_date=due.isoformat(), **kw)
+            open_by_key[(title, kind)] = task
+            added.append(task)
+
         for item in items:
             publish = date.fromisoformat(item.date)
-            title = f"انتشار {item.format}: {item.title} ({item.business})"
-            added.append(self.add(
-                title, "media", "today", now=now, kind="publish", due_date=item.date,
-                priority="high", notes=item.script,
-            ))
+            put(f"انتشار {item.format}: {item.title} ({item.business})", "publish", publish,
+                priority="high", notes=item.script)
             if item.script:
-                film_day = max(publish - timedelta(days=1), today)
-                added.append(self.add(
-                    f"ضبط «{item.title}» ({item.format})", "media", "today", now=now,
-                    kind="filming", due_date=film_day.isoformat(), notes=item.script,
-                ))
+                put(f"ضبط «{item.title}» ({item.format})", "filming",
+                    max(publish - timedelta(days=1), today), notes=item.script)
             if item.prep:
-                prep_day = max(publish - timedelta(days=2), today)
-                added.append(self.add(
-                    f"آماده‌سازی برای «{item.title}»: {item.prep}", "media", "today", now=now,
-                    kind="content_prep", due_date=prep_day.isoformat(), delegated=True,
-                ))
+                put(f"آماده‌سازی برای «{item.title}»: {item.prep}", "content_prep",
+                    max(publish - timedelta(days=2), today), delegated=True)
         self.db.set_state("content_plan", text[:20000])
         return Result(reply, added)
 
@@ -250,6 +253,10 @@ class CityHall:
         self.db.update_task(task_id, next_nudge_at=when, postpone_count=task.postpone_count + 1)
         self.db.log(task_id, "snoozed", now=now, option=option)
         return when
+
+    def drop(self, task_id: int, now: datetime) -> None:
+        self.db.update_task(task_id, status="dropped", next_nudge_at=None)
+        self.db.log(task_id, "dropped", now=now)
 
     def block(self, task_id: int, now: datetime) -> None:
         self.db.update_task(task_id, board="waiting", next_nudge_at=None)

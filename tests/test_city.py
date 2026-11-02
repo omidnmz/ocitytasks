@@ -198,3 +198,19 @@ def test_old_database_gets_notes_column(tmp_path):
     db = DB(str(path))
     assert db.get_task(1).notes is None
     assert db.add_task("new", "media", notes="script").notes == "script"
+
+
+def test_sending_a_plan_again_does_not_duplicate(city):
+    half = HANDOFF.split("### 2026-11-06")[0]
+    first = city.import_content_plan(half, at(2, 10))
+    assert len(first.added) == 3  # publish, filming, prep
+    second = city.import_content_plan(HANDOFF, at(2, 11))
+    assert len(second.added) == 1  # only the SmartO piece is new
+    media = [t for t in city.db.open_tasks() if t.building == "media" and t.mission_id is None]
+    assert len(media) == 4
+
+
+def test_drop_removes_task_from_open_list(city):
+    t = city.add("junk", "cityhall", now=at(2, 9))
+    city.drop(t.id, at(2, 10))
+    assert t.id not in [x.id for x in city.db.open_tasks()]
