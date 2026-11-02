@@ -13,7 +13,10 @@ follows up on tasks at the right moment, and learns how you work.
   One tap answers: ✅ done, ⏰ 30 min / 1 hour / tonight / tomorrow, 🧱 stuck, 👥 give to staff.
 - **Check-ins** (14:00 and 20:00) over today's tasks that have no time yet.
 - **Content sprint**: for the first 3 days it follows up three times a day until several days of content are planned, filmed, edited and scheduled.
-- **/plan**: paste a content plan or ready-content table and it becomes dated Media Hub tasks, with prep tasks for staff.
+- **/plan**: paste a content plan and it becomes dated Media Hub tasks, with prep tasks for staff
+  two days before. One line per piece works without Claude:
+  `2026-11-05 | Crocs | size guide | reel | black and white classics` (date | business | title | format | prep).
+  With a Claude key it also reads free-form plans.
 - **Evening wrap-up** (23:00): what got built, unfinished tasks move to tomorrow.
 - **Learning**: every task logs when it was planned, when it was really done, how often it was pushed back and how long it took. `/profile` shows what it learned; tell it rules like «جمعه‌ها کار سایت نمی‌کنم».
 - **The city**: each ✅ adds a floor to its building; overdue work puts scaffolding on it (`/city`).

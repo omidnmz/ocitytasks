@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from . import learning
-from .ai import AI
+from .ai import AI, ContentItem
 from .buildings import BUILDINGS, CONTENT_SPRINT_STEPS, STARTER_TASKS, label
 from .config import Config
 from .db import DB, Task, parse_iso
@@ -21,6 +21,27 @@ log = logging.getLogger(__name__)
 
 RENUDGE_HIGH_AFTER = timedelta(hours=2)
 SPRINT_DAYS = 3
+
+
+PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def parse_plan_table(text: str) -> list[ContentItem]:
+    """Read "date | business | title | format | prep" lines; other lines are ignored."""
+    items = []
+    for line in text.splitlines():
+        cells = [c.strip() for c in line.translate(PERSIAN_DIGITS).strip().strip("|").split("|")]
+        if len(cells) < 4:
+            continue
+        try:
+            day = date.fromisoformat(cells[0].replace("/", "-"))
+        except ValueError:
+            continue  # header or separator row
+        items.append(ContentItem(
+            date=day.isoformat(), business=cells[1], title=cells[2], format=cells[3],
+            prep=cells[4] if len(cells) > 4 and cells[4] else None,
+        ))
+    return items
 
 
 @dataclass
@@ -144,11 +165,19 @@ class CityHall:
         return Result(plan.reply, added)
 
     def import_content_plan(self, text: str, now: datetime) -> Result:
-        if not self.ai:
-            return Result("برای خوندن برنامه محتوا باید کلید Claude تنظیم بشه.")
-        plan = self.ai.content_plan(text, self.local(now))
+        items = parse_plan_table(text)
+        if items:
+            reply = f"{len(items)} محتوا از جدول خونده شد."
+        elif self.ai:
+            plan = self.ai.content_plan(text, self.local(now))
+            items, reply = plan.items, plan.reply
+        else:
+            return Result(
+                "این برنامه رو نتونستم بخونم. بدون کلید Claude، هر محتوا باید یه خط به این شکل باشه:\n"
+                "2026-11-05 | کراکس | راهنمای سایز | ریل | دمپایی کلاسیک مشکی و سفید"
+            )
         added = []
-        for item in plan.items:
+        for item in items:
             publish = date.fromisoformat(item.date)
             title = f"انتشار {item.format}: {item.title} ({item.business})"
             added.append(self.add(title, "media", "today", now=now, kind="publish", due_date=item.date, priority="high"))
@@ -159,7 +188,7 @@ class CityHall:
                     kind="content_prep", due_date=prep_day.isoformat(), delegated=True,
                 ))
         self.db.set_state("content_plan", text[:20000])
-        return Result(plan.reply, added)
+        return Result(reply, added)
 
     # --- buttons ---------------------------------------------------------
     def done(self, task_id: int, now: datetime) -> Task:

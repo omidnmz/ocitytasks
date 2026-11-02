@@ -138,3 +138,22 @@ def test_city_view_shows_floors_and_scaffolding(city):
     view = city.city_view(at(2, 11))
     assert "Media Hub: ▮ 1 طبقه" in view
     assert "داربست" in view
+
+
+def test_plan_table_imports_without_ai(city):
+    text = """| تاریخ | بیزنس | عنوان | فرمت | آماده‌سازی |
+|---|---|---|---|---|
+| ۲۰۲۶-۱۱-۰۵ | کراکس | راهنمای سایز | ریل | کلاسیک مشکی و سفید |
+2026-11-06 | SmartO | معرفی پنل | موشن |
+"""
+    result = city.import_content_plan(text, at(2, 10))
+    titles = [t.title for t in result.added]
+    assert len(result.added) == 3
+    assert any("راهنمای سایز" in t and "انتشار" in t for t in titles)
+    prep = [t for t in result.added if t.kind == "content_prep"][0]
+    assert prep.due_date == "2026-11-03" and prep.delegated
+
+
+def test_unreadable_plan_without_ai_explains_format(city):
+    result = city.import_content_plan("this week film the clogs", at(2, 10))
+    assert not result.added and "|" in result.reply

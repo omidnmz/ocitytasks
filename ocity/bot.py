@@ -143,7 +143,11 @@ class Bot:
             await self.import_plan(update, body)
         else:
             self.awaiting_plan = True
-            await update.message.reply_text("برنامه محتوا یا جدول محتوای آماده رو همینجا بفرست (متن یا کپی جدول).")
+            await update.message.reply_text(
+                "برنامه محتوا رو همینجا بفرست. هر محتوا یه خط:\n"
+                "2026-11-05 | کراکس | راهنمای سایز | ریل | کلاسیک مشکی و سفید\n"
+                "(تاریخ | بیزنس | عنوان | فرمت | آماده‌سازی)"
+            )
 
     async def sprint(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
