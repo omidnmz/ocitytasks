@@ -17,6 +17,19 @@ def _parse_times(value: str) -> list[time]:
     return [_parse_time(v) for v in value.split(",") if v.strip()]
 
 
+WEEKDAYS = {name: i for i, name in enumerate(
+    ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+)}
+
+
+def _parse_weekdays(value: str) -> list[int]:
+    return [WEEKDAYS[v.strip().lower()] for v in value.split(",") if v.strip()]
+
+
+def _parse_list(value: str) -> list[str]:
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 def _parse_windows(value: str) -> list[tuple[time, time]]:
     """"14:30-16:00,19:00-20:00" -> [(14:30, 16:00), (19:00, 20:00)]"""
     windows = []
@@ -41,6 +54,11 @@ class Config:
     )
     checkin_times: list[time] = field(default_factory=lambda: [time(14, 0), time(20, 0)])
     quiet_windows: list[tuple[time, time]] = field(default_factory=list)
+    # The weekly content cycle: plan day, then batch filming on production days
+    plan_day: int = 3  # thursday
+    production_days: list[int] = field(default_factory=lambda: [5, 1])  # saturday, tuesday
+    # Buildings in the order the Mayor wants to grow them
+    building_priority: list[str] = field(default_factory=lambda: ["media", "retail", "smarto", "marketing"])
     db_path: str = "data/ocity.db"
 
     @property
@@ -76,5 +94,8 @@ def load() -> Config:
         mission_followups=_parse_times(env("MISSION_FOLLOWUPS", "12:30,17:00,21:30")),
         checkin_times=_parse_times(env("CHECKIN_TIMES", "14:00,20:00")),
         quiet_windows=_parse_windows(env("QUIET_WINDOWS", "")),
+        plan_day=_parse_weekdays(env("PLAN_DAY", "thursday"))[0],
+        production_days=_parse_weekdays(env("PRODUCTION_DAYS", "saturday,tuesday")),
+        building_priority=_parse_list(env("BUILDING_PRIORITY", "media,retail,smarto,marketing")),
         db_path=env("DB_PATH", "data/ocity.db"),
     )

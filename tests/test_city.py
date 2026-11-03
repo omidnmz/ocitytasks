@@ -151,7 +151,8 @@ def test_plan_table_imports_without_ai(city):
     assert len(result.added) == 3
     assert any("راهنمای سایز" in t and "انتشار" in t for t in titles)
     prep = [t for t in result.added if t.kind == "content_prep"][0]
-    assert prep.due_date == "2026-11-03" and prep.delegated
+    # filmed on Tuesday the 3rd (a production day), staff prep the day before
+    assert prep.due_date == "2026-11-02" and prep.delegated
 
 
 def test_unreadable_plan_without_ai_explains_format(city):
@@ -173,13 +174,13 @@ def test_handoff_scripts_become_filming_tasks_and_arrive_on_the_day(city):
     result = city.import_content_plan(HANDOFF, at(2, 10))
     filming = [t for t in result.added if t.kind == "filming"]
     assert len(filming) == 1
-    assert filming[0].due_date == "2026-11-04"
+    assert filming[0].due_date == "2026-11-03"  # Tuesday, a production day
     assert "شات ۲" in filming[0].notes and "کپشن" in filming[0].notes
     smarto = [t for t in result.added if "معرفی پنل" in t.title]
     assert len(smarto) == 1 and smarto[0].notes is None
-    # nothing on the 3rd, the script arrives with the morning brief on the 4th
-    assert not [m for m in city.tick(at(3, 10, 30)) if m.text.startswith("📝")]
-    scripts = [m for m in city.tick(at(4, 10, 30)) if m.text.startswith("📝")]
+    # nothing before the production day, the script arrives with the morning brief on the 3rd
+    assert not [m for m in city.tick(at(2, 23, 59)) if m.text.startswith("📝")]
+    scripts = [m for m in city.tick(at(3, 10, 30)) if m.text.startswith("📝")]
     assert len(scripts) == 1 and scripts[0].task_id == filming[0].id
 
 
@@ -223,8 +224,34 @@ def test_digest_shows_today_and_one_next_step_per_building(city):
     sprint_steps = [t for t in city.db.open_tasks() if t.mission_id]
     assert sprint_steps[0].title in digest
     assert sprint_steps[1].title not in digest  # only the next sprint step
-    assert "معرفی پنل" not in digest or "قدم بعدی" in digest
-    media_line = [l for l in digest.splitlines() if l.startswith("🎬 Media Hub:")]
+    media_line = [l for l in digest.splitlines() if "🎬 Media Hub:" in l]
     assert len(media_line) == 1 and "کار در صف" in media_line[0]
     full = city.all_view(at(2, 10))
     assert sprint_steps[1].title in full and "معرفی پنل" in full
+
+
+def test_media_hub_comes_first_in_the_priority_list(city):
+    city.add("buy domain", "smarto", "construction", now=at(2, 9))
+    city.add("film size guide", "media", "construction", now=at(2, 9))
+    digest = city.tasks_view(at(2, 10))
+    assert "1. 🎬 Media Hub" in digest and "2. 🤖 SmartO" in digest
+
+
+def test_plan_day_asks_for_handoff_until_it_arrives(city):
+    # 2026-11-05 is a Thursday, the default plan day
+    msgs = city.tick(at(5, 10, 30))
+    assert any("روز برنامه هفته بعد" in m.text for m in msgs)
+    msgs = city.tick(at(6, 10, 30))
+    assert any("هنوز هندآف" in m.text for m in msgs)
+    city.import_content_plan(HANDOFF.replace("2026-11-05", "2026-11-12").replace("2026-11-06", "2026-11-13"), at(6, 11))
+    assert not any("هندآف" in m.text for m in city.tick(at(7, 10, 30)))
+
+
+def test_production_day_opens_with_the_batch_and_buffer_counts_filmed_pieces(city):
+    city.import_content_plan(HANDOFF, at(2, 9))
+    msgs = city.tick(at(3, 10, 30))  # Tuesday, a production day
+    batch = [m for m in msgs if "روز تولید" in m.text]
+    assert len(batch) == 1 and "1 محتوا برای ضبط" in batch[0].text and "اورژانسی" in batch[0].text
+    filming = [t for t in city.db.open_tasks() if t.kind == "filming"][0]
+    city.done(filming.id, at(3, 12))
+    assert city.content_buffer(at(3, 13)) == 1
