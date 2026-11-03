@@ -448,8 +448,65 @@ class CityHall:
         return "\n".join(lines)
 
     def tasks_view(self, now: datetime) -> str:
+        """The Mayor's digest: what matters today, and one next step per building."""
         today = self.local(now).date().isoformat()
-        boards = {"today": "📌 امروز", "waiting": "⏳ در انتظار", "construction": "🏗 در حال ساخت"}
+        open_ = self.db.open_tasks()
+
+        def line(t: Task) -> str:
+            staff = " 👥" if t.delegated else ""
+            note = " 📝" if t.notes else ""
+            return f"#{t.id} {BUILDINGS[t.building].emoji} {t.title}{staff}{note}"
+
+        # of each mission, only the step that is up next
+        seen_missions: set[int] = set()
+        visible = []
+        for t in sorted(open_, key=lambda t: (t.mission_id or 0, t.step_order or 0)):
+            if t.mission_id is not None:
+                if t.mission_id in seen_missions:
+                    continue
+                seen_missions.add(t.mission_id)
+            visible.append(t)
+        visible.sort(key=lambda t: (t.priority != "high", t.due_date or "9999", t.due_time or "", t.id))
+
+        due = [t for t in visible if t.board == "today" and (t.due_date or today) <= today]
+        overdue = [t for t in due if t.due_date and t.due_date < today]
+        mine = [t for t in due if t not in overdue and not t.delegated]
+        staff = [t for t in due if t not in overdue and t.delegated]
+        waiting = [t for t in open_ if t.board == "waiting"]
+        shown = {t.id for t in due}
+
+        lines = ["🏛 گزارش شهرداری، امروز"]
+        if overdue:
+            lines += ["", f"⏰ عقب‌افتاده ({len(overdue)})"] + [line(t) for t in overdue[:5]]
+        lines += ["", "📌 کارهای امروز تو"]
+        lines += [line(t) for t in mine[:7]] or ["امروز کار ثبت‌شده‌ای نداری."]
+        if len(mine) > 7:
+            lines.append(f"... و {len(mine) - 7} کار دیگه")
+        if staff:
+            lines += ["", "👥 برای پرسنل"] + [line(t) for t in staff[:5]]
+        if waiting:
+            lines += ["", f"⏳ منتظر بقیه ({len(waiting)}): {waiting[0].title}"]
+
+        nexts = []
+        for key, b in BUILDINGS.items():
+            queue = sorted(
+                (t for t in visible if t.building == key and t.id not in shown and t.board != "waiting"),
+                key=lambda t: (t.due_date or "9999", t.id),
+            )
+            if queue:
+                t = queue[0]
+                when = f" ({t.due_date})" if t.due_date else ""
+                more = f"، {len(queue)} کار در صف" if len(queue) > 1 else ""
+                nexts.append(f"{b.emoji} {b.name}: {t.title}{when}{more}")
+        if nexts:
+            lines += ["", "🏗 قدم بعدی هر ساختمون"] + nexts
+
+        lines += ["", "همه کارها: /all · سناریو: /script شماره"]
+        return "\n".join(lines)[:4000]
+
+    def all_view(self, now: datetime) -> str:
+        today = self.local(now).date().isoformat()
+        boards = {"today": "📌 روزانه", "waiting": "⏳ در انتظار", "construction": "🏗 در حال ساخت"}
         lines = []
         open_ = self.db.open_tasks()
         for board, title in boards.items():
@@ -459,10 +516,8 @@ class CityHall:
             lines.append(f"\n{title}")
             for t in items:
                 mark = "⏰ " if t.due_date and t.due_date < today else ""
+                when = f" ({t.due_date[5:]})" if t.due_date and t.due_date > today else ""
                 staff = " 👥" if t.delegated else ""
                 note = " 📝" if t.notes else ""
-                lines.append(f"{mark}#{t.id} {BUILDINGS[t.building].emoji} {t.title}{staff}{note}")
-        text = "\n".join(lines).strip() or "هیچ کار بازی نداری 🎉"
-        if any(t.notes for t in open_):
-            text += "\n\n📝 یعنی سناریو داره: /script شماره"
-        return text
+                lines.append(f"{mark}#{t.id} {BUILDINGS[t.building].emoji} {t.title}{when}{staff}{note}")
+        return "\n".join(lines).strip() or "هیچ کار بازی نداری 🎉"

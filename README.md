@@ -63,7 +63,8 @@ to keep it silent during busy shop hours. Data lives in `data/ocity.db` (SQLite)
 | | |
 |---|---|
 | `/today` | morning brief now |
-| `/tasks` | open tasks by board (today, waiting, construction) |
+| `/tasks` | today's digest: overdue, today, staff, waiting, and one next step per building |
+| `/all` | every open task by board |
 | `/city` | buildings, floors, scaffolding |
 | `/profile` | learned work patterns and your rules |
 | `/plan` | import a content plan |
