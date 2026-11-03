@@ -201,28 +201,94 @@ class CityHall:
         today = self.local(now).date()
         open_by_key = {(t.title, t.kind): t for t in self.db.open_tasks() if t.building == "media"}
 
-        def put(title: str, kind: str, due: date, **kw) -> None:
+        def put(title: str, kind: str, due: date, **kw) -> Task:
             """Sending the same plan again updates its tasks instead of duplicating them."""
             existing = open_by_key.get((title, kind))
             if existing:
                 self.db.update_task(existing.id, due_date=due.isoformat(), notes=kw.get("notes"))
-                return
+                return existing
             task = self.add(title, "media", "today", now=now, kind=kind, due_date=due.isoformat(), **kw)
             open_by_key[(title, kind)] = task
             added.append(task)
+            return task
 
         for item in items:
             publish = date.fromisoformat(item.date)
-            put(f"انتشار {item.format}: {item.title} ({item.business})", "publish", publish,
-                priority="high", notes=item.script)
+            film_day = self.production_day_for(publish, today)
+            published = put(f"انتشار {item.format}: {item.title} ({item.business})", "publish", publish,
+                            priority="high", notes=item.script)
             if item.script:
-                put(f"ضبط «{item.title}» ({item.format})", "filming",
-                    max(publish - timedelta(days=1), today), notes=item.script)
+                put(f"ضبط «{item.title}» ({item.format})", "filming", film_day,
+                    notes=item.script, link_id=published.id)
             if item.prep:
                 put(f"آماده‌سازی برای «{item.title}»: {item.prep}", "content_prep",
-                    max(publish - timedelta(days=2), today), delegated=True)
+                    max(film_day - timedelta(days=1), today), delegated=True)
         self.db.set_state("content_plan", text[:20000])
+        self.db.set_state("last_plan_import", today.isoformat())
         return Result(reply, added)
+
+    def production_day_for(self, publish: date, today: date) -> date:
+        """Film in batches: the last production day before publishing, else the day before."""
+        days = self.cfg.production_days
+        d = publish - timedelta(days=1)
+        while d >= today:
+            if d.weekday() in days:
+                return d
+            d -= timedelta(days=1)
+        return max(publish - timedelta(days=1), today)
+
+    def content_buffer(self, now: datetime) -> int:
+        """Pieces already filmed and waiting to be published."""
+        today = self.local(now).date().isoformat()
+        filmed = {t.link_id for t in self.db.done_tasks() if t.kind == "filming" and t.link_id}
+        return sum(
+            1 for t in self.db.open_tasks()
+            if t.kind == "publish" and t.id in filmed and (t.due_date or today) >= today
+        )
+
+    def buffer_line(self, now: datetime) -> str:
+        n = self.content_buffer(now)
+        state = "🟢 سالم" if n >= 3 else ("🟡 در حال جبران" if n == 2 else "🔴 اورژانسی")
+        return f"📦 بافر محتوا: {n} آماده انتشار ({state})"
+
+    # --- the weekly content cycle ----------------------------------------
+    def weekly_cycle(self, now: datetime) -> list[Outgoing]:
+        """Plan day: ask for next week's handoff (and keep asking for 2 days).
+        Production days: open the day with the batch of pieces to film."""
+        out = []
+        local = self.local(now)
+        today = local.date()
+        since_plan_day = (today.weekday() - self.cfg.plan_day) % 7
+        plan_day = today - timedelta(days=since_plan_day)
+        last_import = self.db.get_state("last_plan_import") or ""
+        if since_plan_day <= 2 and last_import < plan_day.isoformat():
+            if since_plan_day == 0:
+                text = ("📅 امروز روز برنامه هفته بعده.\n"
+                        "توی پروژه Media Hub بنویس «هندآف هفته بعد» و فایل txt خروجی رو همینجا برام بفرست.")
+            else:
+                text = ("📅 هنوز هندآف هفته بعد نرسیده. بدون اون روزهای تولید خالی می‌مونن.\n"
+                        "از Media Hub بگیرش و فایل txt رو بفرست.")
+            out.append(Outgoing(text))
+
+        if today.weekday() in self.cfg.production_days:
+            iso_today = today.isoformat()
+            filming = [t for t in self.db.open_tasks()
+                       if t.kind == "filming" and t.due_date and t.due_date <= iso_today]
+            if filming:
+                lines = [f"🎬 امروز روز تولیده: {len(filming)} محتوا برای ضبط.",
+                         "یه بلوک ۲ تا ۳ ساعته برای خودت بذار. سناریوی هر کدوم پایین میاد."]
+                lines += [f"#{t.id} {t.title}" for t in filming]
+            else:
+                upcoming = sorted(t.due_date for t in self.db.open_tasks()
+                                  if t.kind == "filming" and t.due_date)
+                if upcoming:
+                    lines = [f"🎬 امروز روز تولیده ولی چیزی برای ضبط نداری. ضبط بعدی: {upcoming[0]}"]
+                else:
+                    lines = ["🎬 امروز روز تولیده، ولی چیزی برای ضبط ثبت نشده.",
+                             "اگه هندآف این هفته رو نفرستادی، الان از Media Hub بگیر و بفرست."]
+            lines.append(self.buffer_line(now))
+            out.append(Outgoing("\n".join(lines)))
+        return out
 
     # --- buttons ---------------------------------------------------------
     def done(self, task_id: int, now: datetime) -> Task:
@@ -275,6 +341,7 @@ class CityHall:
         if local.time() >= self.cfg.morning_time and self.db.get_state("last_morning") != today:
             self.db.set_state("last_morning", today)
             out.append(Outgoing(self.morning_brief(now)))
+            out.extend(self.weekly_cycle(now))
             out.extend(self.todays_scripts(now))
 
         for task in self.db.tasks_due_for_nudge(now):
@@ -383,6 +450,8 @@ class CityHall:
         postponed = learning.often_postponed(self.profile())
         if postponed:
             lines.append("Often postponed: " + ", ".join(postponed))
+        lines.append("\nBuilding priority (grow first): " + ", ".join(self.cfg.building_priority))
+        lines.append(f"Content buffer (filmed, not yet published): {self.content_buffer(now)}")
         rules = self.db.rules()
         if rules:
             lines.append("\nMayor's rules:\n" + "\n".join(f"- {r}" for r in rules))
@@ -397,18 +466,7 @@ class CityHall:
         return self.template_morning(now)
 
     def template_morning(self, now: datetime) -> str:
-        today = self.local(now).date().isoformat()
-        open_ = self.db.open_tasks()
-        due = [t for t in open_ if t.board == "today" and (t.due_date or today) <= today]
-        overdue = [t for t in due if t.due_date and t.due_date < today]
-        waiting = [t for t in open_ if t.board == "waiting"]
-        lines = ["☀️ صبح بخیر شهردار!", "", "سه کار اصلی امروز:"]
-        lines += [f"{i}. {label(t.building)}: {t.title}" for i, t in enumerate(due[:3], 1)] or ["امروز کار ثبت‌شده‌ای نداری."]
-        if overdue:
-            lines += ["", f"⏰ {len(overdue)} کار عقب افتاده داری."]
-        if waiting:
-            lines += ["", f"⏳ منتظر بقیه: {waiting[0].title}"]
-        return "\n".join(lines)
+        return "☀️ صبح بخیر شهردار!\n\n" + self.tasks_view(now)
 
     def evening_wrap(self, now: datetime) -> str:
         local = self.local(now)
@@ -488,7 +546,10 @@ class CityHall:
             lines += ["", f"⏳ منتظر بقیه ({len(waiting)}): {waiting[0].title}"]
 
         nexts = []
-        for key, b in BUILDINGS.items():
+        order = [k for k in self.cfg.building_priority if k in BUILDINGS]
+        order += [k for k in BUILDINGS if k not in order]
+        for key in order:
+            b = BUILDINGS[key]
             queue = sorted(
                 (t for t in visible if t.building == key and t.id not in shown and t.board != "waiting"),
                 key=lambda t: (t.due_date or "9999", t.id),
@@ -497,9 +558,11 @@ class CityHall:
                 t = queue[0]
                 when = f" ({t.due_date})" if t.due_date else ""
                 more = f"، {len(queue)} کار در صف" if len(queue) > 1 else ""
-                nexts.append(f"{b.emoji} {b.name}: {t.title}{when}{more}")
+                nexts.append(f"{len(nexts) + 1}. {b.emoji} {b.name}: {t.title}{when}{more}")
         if nexts:
-            lines += ["", "🏗 قدم بعدی هر ساختمون"] + nexts
+            lines += ["", "🏗 ساختمون‌های منتظر قدم بعدی (به ترتیب اولویت)"] + nexts
+        if any(t.kind == "publish" for t in open_):
+            lines += ["", self.buffer_line(now)]
 
         lines += ["", "همه کارها: /all · سناریو: /script شماره"]
         return "\n".join(lines)[:4000]

@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     mission_id INTEGER,
     step_order INTEGER,
     notes TEXT,                                 -- e.g. the script for a content task
+    link_id INTEGER,                            -- filming task -> its publish task
     created_at TEXT NOT NULL,
     done_at TEXT
 );
@@ -93,6 +94,7 @@ class Task:
     mission_id: int | None
     step_order: int | None
     notes: str | None
+    link_id: int | None
     created_at: str
     done_at: str | None
 
@@ -105,9 +107,10 @@ class DB:
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(tasks)")}
-        if "notes" not in columns:  # databases created before scripts existed
-            self.conn.execute("ALTER TABLE tasks ADD COLUMN notes TEXT")
-            self.conn.commit()
+        for column, kind in (("notes", "TEXT"), ("link_id", "INTEGER")):
+            if column not in columns:  # databases created by an older version
+                self.conn.execute(f"ALTER TABLE tasks ADD COLUMN {column} {kind}")
+        self.conn.commit()
 
     # --- state -----------------------------------------------------------
     def get_state(self, key: str) -> str | None:
@@ -139,17 +142,18 @@ class DB:
         mission_id: int | None = None,
         step_order: int | None = None,
         notes: str | None = None,
+        link_id: int | None = None,
         now: datetime | None = None,
     ) -> Task:
         now = now or utcnow()
         cur = self.conn.execute(
             "INSERT INTO tasks(title, building, board, priority, kind, due_date, due_time, "
-            "next_nudge_at, estimate_min, delegated, mission_id, step_order, notes, created_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "next_nudge_at, estimate_min, delegated, mission_id, step_order, notes, link_id, created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 title, building, board, priority, kind, due_date, due_time,
                 iso(next_nudge_at), estimate_min, int(delegated), mission_id,
-                step_order, notes, iso(now),
+                step_order, notes, link_id, iso(now),
             ),
         )
         self.conn.commit()

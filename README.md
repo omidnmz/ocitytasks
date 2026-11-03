@@ -22,6 +22,14 @@ follows up on tasks at the right moment, and learns how you work.
   `docs/media-hub-claude-project.md` sets up a Claude project that writes this handoff each week.
 - **/script 12**: show the script of task 12. **/del 12 15**: remove tasks 12 and 15.
   Sending the same plan again updates its tasks instead of duplicating them.
+- **Weekly content cycle** (batch production): on `PLAN_DAY` (Thursday) it asks for next week's handoff
+  from the Media Hub Claude project and keeps asking for two days until a plan arrives. Filming is grouped on
+  `PRODUCTION_DAYS` (Saturday and Tuesday): each piece is filmed on the last production day before it goes out,
+  staff prep is due the day before filming, and the morning brief on a production day opens with the batch
+  and its scripts. The rest of the week it only reminds about publishing.
+- **Content buffer**: pieces filmed and waiting to go out. 3 or more is healthy, 2 means catch up, 0 or 1 is an emergency.
+- **Daily digest**: the morning brief and `/tasks` list the buildings waiting for their next step,
+  in `BUILDING_PRIORITY` order (Media Hub, Retail, SmartO, Marketing by default).
 - **Evening wrap-up** (23:00): what got built, unfinished tasks move to tomorrow.
 - **Learning**: every task logs when it was planned, when it was really done, how often it was pushed back and how long it took. `/profile` shows what it learned; tell it rules like «جمعه‌ها کار سایت نمی‌کنم».
 - **The city**: each ✅ adds a floor to its building; overdue work puts scaffolding on it (`/city`).
@@ -56,7 +64,8 @@ copy .env.example .env
 ```
 
 All times are in `TIMEZONE` (default Asia/Tehran). Set `QUIET_WINDOWS=18:30-20:00`
-to keep it silent during busy shop hours. Data lives in `data/ocity.db` (SQLite).
+to keep it silent during busy shop hours. `PLAN_DAY`, `PRODUCTION_DAYS` and `BUILDING_PRIORITY`
+set the weekly content cycle (see `.env.example`). Data lives in `data/ocity.db` (SQLite).
 
 ## Commands
 
