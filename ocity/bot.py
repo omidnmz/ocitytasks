@@ -34,7 +34,8 @@ HELP = """🏛 شهرداری OCity
 
 دستورها:
 /today گزارش امروز
-/tasks همه کارهای باز
+/tasks گزارش امروز و قدم بعدی هر ساختمون
+/all همه کارهای باز
 /city وضعیت شهر و طبقه‌ها
 /profile چیزهایی که از روال کارت یاد گرفتم
 /plan برنامه محتوا رو بعد از این دستور بفرست (متن یا فایل txt)
@@ -123,6 +124,13 @@ class Bot:
     async def tasks(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
             await update.message.reply_text(self.city.tasks_view(now_utc())[:4000])
+
+    async def all_tasks(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self.is_owner(update):
+            return
+        text = self.city.all_view(now_utc())
+        for i in range(0, len(text), 4000):  # long lists go in several messages
+            await update.message.reply_text(text[i:i + 4000])
 
     async def city_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
@@ -297,6 +305,7 @@ def main() -> None:
     app.add_handler(CommandHandler("help", bot.help))
     app.add_handler(CommandHandler("today", bot.today))
     app.add_handler(CommandHandler("tasks", bot.tasks))
+    app.add_handler(CommandHandler("all", bot.all_tasks))
     app.add_handler(CommandHandler("city", bot.city_cmd))
     app.add_handler(CommandHandler("profile", bot.profile))
     app.add_handler(CommandHandler("plan", bot.plan))

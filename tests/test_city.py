@@ -214,3 +214,17 @@ def test_drop_removes_task_from_open_list(city):
     t = city.add("junk", "cityhall", now=at(2, 9))
     city.drop(t.id, at(2, 10))
     assert t.id not in [x.id for x in city.db.open_tasks()]
+
+
+def test_digest_shows_today_and_one_next_step_per_building(city):
+    city.seed(at(2, 9))
+    city.import_content_plan(HANDOFF, at(2, 9))
+    digest = city.tasks_view(at(2, 10))
+    sprint_steps = [t for t in city.db.open_tasks() if t.mission_id]
+    assert sprint_steps[0].title in digest
+    assert sprint_steps[1].title not in digest  # only the next sprint step
+    assert "معرفی پنل" not in digest or "قدم بعدی" in digest
+    media_line = [l for l in digest.splitlines() if l.startswith("🎬 Media Hub:")]
+    assert len(media_line) == 1 and "کار در صف" in media_line[0]
+    full = city.all_view(at(2, 10))
+    assert sprint_steps[1].title in full and "معرفی پنل" in full
