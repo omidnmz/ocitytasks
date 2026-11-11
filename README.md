@@ -108,7 +108,12 @@ pytest
 `ocity/city.py` holds all the logic (no Telegram), `ocity/bot.py` is the Telegram layer,
 `ocity/learning.py` builds the work profile, `ocity/ai.py` talks to Claude.
 
+## The city Mini App
+
+Set `WEBAPP_URL` and the bot also serves a graphical city inside Telegram: towers per building,
+scaffolding on overdue work, today's tasks with one-tap done, snooze, staff and delete, and a
+new-task form. Setup on a Windows server with a Cloudflare Tunnel: `docs/mini-app.md`.
+
 ## Not in this version yet
 
 - Voice messages (needs a speech-to-text service).
-- The visual city map (will read the same database).

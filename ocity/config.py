@@ -61,6 +61,10 @@ class Config:
     # Buildings in the order the Mayor wants to grow them
     building_priority: list[str] = field(default_factory=lambda: ["media", "retail", "smarto", "marketing"])
     db_path: str = "data/ocity.db"
+    # Mini App: the public https address Telegram opens, and where the bot's web server listens
+    webapp_url: str = ""
+    web_host: str = "127.0.0.1"
+    web_port: int = 8080
 
     @property
     def ai_enabled(self) -> bool:
@@ -100,4 +104,7 @@ def load() -> Config:
         review_day=_parse_weekdays(env("REVIEW_DAY", "friday"))[0],
         building_priority=_parse_list(env("BUILDING_PRIORITY", "media,retail,smarto,marketing")),
         db_path=env("DB_PATH", "data/ocity.db"),
+        webapp_url=env("WEBAPP_URL", "").strip().rstrip("/"),
+        web_host=env("WEB_HOST", "127.0.0.1"),
+        web_port=int(env("WEB_PORT", "8080") or 8080),
     )

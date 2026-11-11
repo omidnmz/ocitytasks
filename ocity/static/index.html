@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>شهر OCity</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #f4f1ea);
+    --card: var(--tg-theme-secondary-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #1d1b18);
+    --muted: var(--tg-theme-hint-color, #8a847a);
+    --accent: var(--tg-theme-button-color, #2f6fde);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --line: color-mix(in srgb, var(--text) 12%, transparent);
+    --danger: #d9534f;
+    --ok: #2e9b5f;
+    --sky1: #bfdcf5;
+    --sky2: #f6e7cf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-tg]) { --bg: #16181d; --card: #20232a; --text: #ecebe8; --muted: #8d8f96; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Vazirmatn", Tahoma, system-ui, sans-serif; font-size: 15px; }
+  body { padding-bottom: 76px; }
+  header { padding: 14px 16px 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  header h1 { font-size: 18px; margin: 0; flex: 1 1 auto; }
+  .pill { background: var(--card); border-radius: 999px; padding: 5px 11px; font-size: 13px;
+    border: 1px solid var(--line); white-space: nowrap; }
+  main { padding: 0 16px; }
+  .view { display: none; } .view.on { display: block; }
+
+  /* the skyline */
+  .sky { position: relative; border-radius: 18px; overflow-x: auto; overflow-y: hidden;
+    background: linear-gradient(var(--sky1), var(--sky2)); padding: 26px 10px 0; }
+  .night .sky { background: linear-gradient(#1d2b4a, #3b3a5a); }
+  .street { display: flex; align-items: flex-end; gap: 8px; min-width: max-content; height: 330px; }
+  .tower { width: 52px; display: flex; flex-direction: column; align-items: center; cursor: pointer;
+    border: 0; background: none; padding: 0; color: inherit; font: inherit; }
+  .tower .roof { font-size: 22px; line-height: 1; margin-bottom: 4px; }
+  .tower .body { position: relative; width: 44px; border-radius: 6px 6px 0 0;
+    background-color: var(--c);
+    background-image: repeating-linear-gradient(0deg, transparent 0 6px, rgba(255,255,255,.55) 6px 10px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 6px, transparent 6px 12px);
+    background-blend-mode: normal; box-shadow: inset 0 -6px 0 rgba(0,0,0,.15);
+    transition: height .6s ease; }
+  .tower.scaffold .body::after { content: ""; position: absolute; inset: -3px -5px 0;
+    border: 2px solid #b07d2b; border-bottom: 0;
+    background: repeating-linear-gradient(45deg, transparent 0 7px, rgba(176,125,43,.75) 7px 9px); }
+  .tower.priority .roof::after { content: "⭐"; font-size: 11px; vertical-align: top; }
+  .tower .n { font-size: 11px; color: #3a3630; margin: 3px 0 2px; }
+  .night .tower .n { color: #e6e3dc; }
+  .tower .lbl { width: 60px; margin: 0 -4px; background: #5f5c56; color: #fff; font-size: 10px;
+    padding: 8px 2px 10px; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .legend { color: var(--muted); font-size: 12px; margin: 8px 2px 14px; line-height: 1.7; }
+
+  /* lists */
+  h2 { font-size: 15px; margin: 18px 2px 8px; color: var(--muted); font-weight: 600; }
+  .card { background: var(--card); border-radius: 14px; padding: 12px; margin-bottom: 10px;
+    border: 1px solid var(--line); }
+  .card .t { font-weight: 600; line-height: 1.5; }
+  .card .meta { color: var(--muted); font-size: 12px; margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .card.late { border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
+  .acts { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  button.b { border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px;
+    background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); cursor: pointer; }
+  button.b.main { background: var(--accent); color: var(--accent-text); }
+  button.b.warn { color: var(--danger); }
+  .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+
+  /* new task */
+  textarea { width: 100%; min-height: 90px; border-radius: 14px; border: 1px solid var(--line);
+    background: var(--card); color: var(--text); padding: 12px; font: inherit; resize: vertical; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px;
+    padding: 7px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .chip.on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+  .wide { width: 100%; margin-top: 16px; padding: 13px; font-size: 16px; }
+
+  /* tabs, sheet, toast */
+  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--card);
+    border-top: 1px solid var(--line); padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); }
+  nav button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px;
+    padding: 6px 0; border-radius: 10px; cursor: pointer; }
+  nav button b { display: block; font-size: 20px; font-weight: normal; }
+  nav button.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; z-index: 5; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 80vh; overflow-y: auto;
+    background: var(--bg); border-radius: 20px 20px 0 0; padding: 16px 16px 28px; transform: translateY(100%);
+    transition: transform .25s ease; z-index: 6; }
+  .sheet.on { transform: none; } .sheet-bg.on { display: block; }
+  .sheet h3 { margin: 0 0 12px; font-size: 17px; }
+  .toast { position: fixed; left: 16px; right: 16px; bottom: 86px; background: #222; color: #fff;
+    padding: 12px 14px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s;
+    pointer-events: none; z-index: 7; white-space: pre-line; }
+  .toast.on { opacity: .95; }
+  .err { padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏛 شهر OCity</h1>
+  <span class="pill" id="streak">🔥 …</span>
+  <span class="pill" id="buffer" hidden></span>
+</header>
+
+<main>
+  <section class="view on" id="v-city">
+    <div class="sky"><div class="street" id="street"></div></div>
+    <div class="legend">هر ✅ یه طبقه به ساختمونش اضافه می‌کنه. داربست یعنی کار عقب‌افتاده داره. ⭐ ساختمون‌های اولویت‌دار.
+      روی هر ساختمون بزن تا کارهاش رو ببینی. برای دیدن بقیه ساختمون‌ها، شهر رو به چپ بکش.</div>
+  </section>
+
+  <section class="view" id="v-today"><div id="today"></div></section>
+
+  <section class="view" id="v-add">
+    <h2>چی یادت افتاد؟</h2>
+    <textarea id="text" placeholder="مثلاً: فردا ساعت ۶ عصر به مشتری کراکس زنگ بزنم"></textarea>
+    <h2>ساختمون</h2>
+    <div class="chips" id="b-chips"></div>
+    <h2>کی یادت بندازم؟</h2>
+    <div class="chips" id="w-chips"></div>
+    <button class="b main wide" id="save">ثبت کار</button>
+  </section>
+</main>
+
+<nav>
+  <button data-v="city" class="on"><b>🏙</b>شهر</button>
+  <button data-v="today"><b>📌</b>امروز</button>
+  <button data-v="add"><b>➕</b>کار جدید</button>
+</nav>
+
+<div class="sheet-bg" id="sheet-bg"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); document.documentElement.dataset.tg = "1";
+  if (tg.colorScheme === "dark") document.body.classList.add("night"); }
+
+const COLORS = { cityhall: "#c9a96e", retail: "#e0745a", media: "#8b6fd6", marketing: "#e2a93b",
+  smarto: "#3fa7a0", technician: "#6c9bd2", fitness: "#5fb36a", tradebot: "#7a8a99",
+  personal: "#d98bb0", vault: "#b9a24c" };
+const WHEN = [["", "خودکار"], ["1h", "یه ساعت دیگه"], ["evening", "عصر ۱۸"], ["tonight", "امشب ۲۱"],
+  ["tomorrow", "فردا"], ["week", "این هفته"], ["none", "یادآوری نمی‌خواد"]];
+let S = null, pick = { building: "", when: "" };
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fa = (n) => String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
+const floors = (n) => n ? fa(n) + " طبقه" : "زمین خالی";
+const bmap = () => Object.fromEntries(S.buildings.map((b) => [b.key, b]));
+
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: { "Content-Type": "application/json", "X-Init-Data": tg ? tg.initData : "" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 403) throw new Error("forbidden");
+  if (!r.ok) throw new Error("http " + r.status);
+  return r.json();
+}
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 2200);
+}
+
+async function load() {
+  try { S = await api("/api/state"); }
+  catch (e) {
+    document.querySelector("main").innerHTML = e.message === "forbidden"
+      ? '<div class="err">این شهر فقط از داخل ربات شهرداری و برای شهردار باز می‌شه.</div>'
+      : '<div class="err">به ربات وصل نشدم. یه بار ببند و دوباره باز کن.</div>';
+    return;
+  }
+  render();
+}
+
+function render() {
+  $("streak").textContent = "🔥 " + fa(S.streak) + " روز";
+  if (S.buffer !== null) { $("buffer").hidden = false; $("buffer").textContent = "🎬 ذخیره محتوا: " + fa(S.buffer); }
+  drawCity(); drawToday(); drawChips();
+}
+
+function drawCity() {
+  const max = Math.max(5, ...S.buildings.map((b) => b.floors));
+  $("street").innerHTML = S.buildings.map((b) => {
+    const h = 34 + Math.round((Math.min(b.floors, 40) / Math.min(max, 40)) * 200);
+    const cls = ["tower", b.overdue ? "scaffold" : "", b.priority ? "priority" : ""].join(" ");
+    return `<button class="${cls}" data-b="${b.key}" style="--c:${COLORS[b.key] || "#999"}">
+      <span class="roof">${b.emoji}</span><span class="body" style="height:${h}px"></span>
+      <span class="n">${floors(b.floors)}</span><span class="lbl">${esc(b.name)}</span></button>`;
+  }).join("");
+  document.querySelectorAll(".tower").forEach((el) => el.onclick = () => openBuilding(el.dataset.b));
+}
+
+function card(t, opts = {}) {
+  const b = bmap()[t.building];
+  const meta = [];
+  if (!opts.noBuilding) meta.push(b.emoji + " " + esc(b.name));
+  if (t.overdue) meta.push("⏰ عقب‌افتاده");
+  else if (t.due_date && t.due_date !== S.date) meta.push("📅 " + fa(t.due_date.slice(5)));
+  if (t.due_time) meta.push("🕒 " + fa(t.due_time));
+  if (t.staff) meta.push("👥 پرسنل");
+  if (t.board === "waiting") meta.push("⏳ در انتظار");
+  if (t.script) meta.push("📝 سناریو داره");
+  return `<div class="card ${t.overdue ? "late" : ""}" data-id="${t.id}">
+    <div class="t">${esc(t.title)}</div>
+    ${meta.length ? `<div class="meta">${meta.join("<span>•</span>")}</div>` : ""}
+    <div class="acts">
+      <button class="b main" data-a="done">✅ انجام شد</button>
+      <button class="b" data-a="later">⏰ بعداً</button>
+      <button class="b" data-a="more">⋯</button>
+    </div></div>`;
+}
+
+function bindCards(root) {
+  root.querySelectorAll(".card").forEach((c) => {
+    const id = +c.dataset.id;
+    c.querySelectorAll("button").forEach((btn) => btn.onclick = () => cardAction(id, btn.dataset.a));
+  });
+}
+
+function drawToday() {
+  const items = S.today;
+  $("today").innerHTML = `<h2>📌 کارهای امروز (${fa(items.length)})</h2>` +
+    (items.length ? items.map((t) => card(t)).join("") : '<div class="empty">امروز کاری نمونده 🎉<br>یه ساختمون رو توی شهر انتخاب کن و قدم بعدیش رو بردار.</div>') +
+    `<div class="legend">${fa(esc(S.streak_line))}${S.buffer_line ? "<br>" + fa(esc(S.buffer_line)) : ""}</div>`;
+  bindCards($("today"));
+}
+
+function openBuilding(key) {
+  const b = bmap()[key];
+  sheet(`<h3>${b.emoji} ${esc(b.name)}، ${floors(b.floors)}</h3>` +
+    (b.tasks.length ? b.tasks.map((t) => card(t, { noBuilding: true })).join("")
+      : '<div class="empty">این ساختمون فعلاً کار بازی نداره.</div>') +
+    `<button class="b wide" id="add-here">➕ کار جدید برای ${esc(b.name)}</button>`);
+  bindCards($("sheet"));
+  $("add-here").onclick = () => { closeSheet(); pick.building = key; drawChips(); show("add"); $("text").focus(); };
+}
+
+function sheet(html) { $("sheet").innerHTML = html; $("sheet").classList.add("on"); $("sheet-bg").classList.add("on"); }
+function closeSheet() { $("sheet").classList.remove("on"); $("sheet-bg").classList.remove("on"); }
+$("sheet-bg").onclick = closeSheet;
+
+function choose(title, options, done) {
+  sheet(`<h3>${title}</h3><div class="chips">` +
+    options.map(([v, l]) => `<button class="chip" data-v="${v}">${l}</button>`).join("") + "</div>");
+  $("sheet").querySelectorAll(".chip").forEach((c) => c.onclick = () => { closeSheet(); done(c.dataset.v); });
+}
+
+async function act(id, action, body) {
+  try {
+    const r = await api(`/api/task/${id}/${action}`, body || {});
+    if (action === "done" && tg) tg.HapticFeedback.notificationOccurred("success");
+    toast(r.message); closeSheet(); await load();
+  } catch (e) { toast("نشد، دوباره امتحان کن."); }
+}
+
+function cardAction(id, a) {
+  if (a === "done") return act(id, "done");
+  if (a === "later") return choose("کی دوباره بپرسم؟",
+    [["30", "۳۰ دقیقه"], ["60", "یه ساعت"], ["tonight", "امشب"], ["tomorrow", "فردا"]],
+    (v) => act(id, "snooze", { option: v }));
+  choose("این کار رو چی کنیم؟",
+    [["staff", "👥 بده به پرسنل"], ["stuck", "🧱 گیر کردم"], ["move", "🏷 تغییر ساختمون"], ["drop", "🗑 حذف"]],
+    (v) => {
+      if (v === "move") return choose("کدوم ساختمون؟", S.buildings.map((b) => [b.key, b.emoji + " " + b.name]),
+        (k) => act(id, "building", { building: k }));
+      if (v === "drop" && !confirm("این کار حذف بشه؟")) return;
+      act(id, v);
+    });
+}
+
+function drawChips() {
+  $("b-chips").innerHTML = [["", "✨ خودکار"], ...S.buildings.map((b) => [b.key, b.emoji + " " + b.name])]
+    .map(([k, l]) => `<button class="chip ${pick.building === k ? "on" : ""}" data-k="${k}">${esc(l)}</button>`).join("");
+  $("w-chips").innerHTML = WHEN
+    .map(([k, l]) => `<button class="chip ${pick.when === k ? "on" : ""}" data-k="${k}">${l}</button>`).join("");
+  $("b-chips").querySelectorAll(".chip").forEach((c) => c.onclick = () => { pick.building = c.dataset.k; drawChips(); });
+  $("w-chips").querySelectorAll(".chip").forEach((c) => c.onclick = () => { pick.when = c.dataset.k; drawChips(); });
+}
+
+$("save").onclick = async () => {
+  const text = $("text").value.trim();
+  if (!text) return toast("اول بنویس چه کاری.");
+  try {
+    const r = await api("/api/task", { text, building: pick.building || null, when: pick.when || null });
+    toast(r.message); $("text").value = ""; pick = { building: "", when: "" };
+    await load(); show("today");
+  } catch (e) { toast("ثبت نشد، دوباره امتحان کن."); }
+};
+
+function show(v) {
+  document.querySelectorAll(".view").forEach((s) => s.classList.toggle("on", s.id === "v-" + v));
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => show(b.dataset.v));
+
+load();
+</script>
+</body>
+</html>
