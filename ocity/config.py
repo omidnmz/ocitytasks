@@ -57,6 +57,7 @@ class Config:
     # The weekly content cycle: plan day, then batch filming on production days
     plan_day: int = 3  # thursday
     production_days: list[int] = field(default_factory=lambda: [5, 1])  # saturday, tuesday
+    review_day: int = 4  # friday: weekly review with the morning brief
     # Buildings in the order the Mayor wants to grow them
     building_priority: list[str] = field(default_factory=lambda: ["media", "retail", "smarto", "marketing"])
     db_path: str = "data/ocity.db"
@@ -96,6 +97,7 @@ def load() -> Config:
         quiet_windows=_parse_windows(env("QUIET_WINDOWS", "")),
         plan_day=_parse_weekdays(env("PLAN_DAY", "thursday"))[0],
         production_days=_parse_weekdays(env("PRODUCTION_DAYS", "saturday,tuesday")),
+        review_day=_parse_weekdays(env("REVIEW_DAY", "friday"))[0],
         building_priority=_parse_list(env("BUILDING_PRIORITY", "media,retail,smarto,marketing")),
         db_path=env("DB_PATH", "data/ocity.db"),
     )
