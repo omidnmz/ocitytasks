@@ -19,7 +19,8 @@ from telegram.ext import (
 from . import config as config_mod
 from . import learning
 from .ai import make_ai
-from .buildings import label
+from .buildings import BUILDINGS, label
+from .capture import guess_building
 from .city import CityHall, Outgoing
 from .db import DB
 
@@ -27,8 +28,9 @@ log = logging.getLogger(__name__)
 
 HELP = """🏛 شهرداری OCity
 
-هر چیزی بنویسی، می‌فهمم و توی ساختمون درستش ثبت می‌کنم. مثلاً:
+هر کاری که یادت افتاد رو همینجا بنویس. می‌ذارمش توی ساختمون درستش و اگه زمانش رو نگفته باشی، می‌پرسم کی یادت بندازم. مثلاً:
 «پنجشنبه ساعت ۶ به Sea Club زنگ بزنم»
+«ایده: ویدیوی پشت صحنه کلینیک»
 «آپدیت ووکامرس انجام شد»
 «جمعه‌ها کار سایت نمی‌کنم»
 
@@ -71,6 +73,43 @@ def task_keyboard(task_id: int) -> InlineKeyboardMarkup:
     ])
 
 
+def stuck_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ انجام شد", callback_data=f"d:{task_id}"),
+            InlineKeyboardButton("✂️ کوچیکش کن", callback_data=f"x:{task_id}"),
+        ],
+        [
+            InlineKeyboardButton("👥 پرسنل", callback_data=f"g:{task_id}"),
+            InlineKeyboardButton("📅 فردا", callback_data=f"s:{task_id}:tomorrow"),
+            InlineKeyboardButton("🗑 حذف", callback_data=f"r:{task_id}"),
+        ],
+    ])
+
+
+REMIND_OPTIONS = [
+    ("⏰ یه ساعت دیگه", "1h"), ("🌆 عصر ۱۸", "evening"), ("🌙 امشب ۲۱", "tonight"),
+    ("☀️ فردا", "tomorrow"), ("📅 این هفته", "week"), ("🚫 یادآوری نمی‌خواد", "none"),
+]
+REMIND_QUESTION = "کی یادت بندازم؟ یکی رو بزن یا خودت بنویس، مثلاً «پنجشنبه ساعت ۵»."
+
+
+def remind_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    buttons = [InlineKeyboardButton(text, callback_data=f"w:{task_id}:{opt}") for text, opt in REMIND_OPTIONS]
+    return InlineKeyboardMarkup([
+        buttons[:3], buttons[3:],
+        [InlineKeyboardButton("🏷 تغییر ساختمون", callback_data=f"c:{task_id}:?")],
+    ])
+
+
+def building_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    buttons = [
+        InlineKeyboardButton(f"{b.emoji} {b.name}", callback_data=f"c:{task_id}:{key}")
+        for key, b in BUILDINGS.items()
+    ]
+    return InlineKeyboardMarkup([buttons[i:i + 2] for i in range(0, len(buttons), 2)])
+
+
 def done_keyboard(task_ids: list[int]) -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(f"✅ #{i}", callback_data=f"d:{i}") for i in task_ids[j:j + 3]]
             for j in range(0, len(task_ids), 3)]
@@ -92,6 +131,9 @@ class Bot:
         self.db = DB(cfg.db_path)
         self.city = CityHall(self.db, cfg, make_ai(cfg.anthropic_api_key, cfg.claude_model))
         self.awaiting_plan = False
+        self.awaiting_when: int | None = None  # task waiting for a typed reminder time
+        self.awaiting_split: int | None = None  # stuck task waiting for its first small step
+        self.asking_when: set[int] = set()  # tasks whose building picker should lead to the time question
 
     # --- owner -----------------------------------------------------------
     def owner_id(self) -> int | None:
@@ -101,7 +143,10 @@ class Bot:
         return int(stored) if stored else None
 
     def is_owner(self, update: Update) -> bool:
-        return update.effective_chat is not None and update.effective_chat.id == self.owner_id()
+        owner = update.effective_chat is not None and update.effective_chat.id == self.owner_id()
+        if owner:
+            self.city.seen(now_utc())
+        return owner
 
     # --- commands --------------------------------------------------------
     async def start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -229,12 +274,44 @@ class Bot:
             self.awaiting_plan = False
             await self.import_plan(update, message)
             return
+        if self.awaiting_split is not None:
+            task_id, self.awaiting_split = self.awaiting_split, None
+            step = self.city.split(task_id, message, now_utc())
+            await update.message.reply_text(
+                f"✂️ قدم اول ثبت شد: {step.title}\nکار بزرگ رفت توی در حال ساخت.\n\n{REMIND_QUESTION}",
+                reply_markup=remind_keyboard(step.id),
+            )
+            self.awaiting_when = step.id
+            return
+        if self.awaiting_when is not None:
+            task_id, self.awaiting_when = self.awaiting_when, None
+            # a short answer like «پنجشنبه ساعت ۵» is the time; anything longer is a new thought
+            short = len(message.split()) <= 4 and guess_building(message) is None
+            when = self.city.remind_from_text(task_id, message, now_utc()) if short else None
+            if when:
+                await update.message.reply_text(f"⏰ باشه، {when} یادت میندازم.")
+                return
+            # not a time: it is a new thought
         result = await asyncio.to_thread(self.city.handle_message, message, now_utc())
         lines = [result.reply]
-        for t in result.added:
-            when = f" ({t.due_date}{' ' + t.due_time if t.due_time else ''})" if t.due_date else ""
-            lines.append(f"• {label(t.building)}: {t.title}{when}")
-        await update.message.reply_text("\n".join(lines))
+        if self.city.ai:
+            for t in result.added:
+                when = f" ({t.due_date}{' ' + t.due_time if t.due_time else ''})" if t.due_date else ""
+                lines.append(f"• {label(t.building)}: {t.title}{when}")
+        markup = None
+        task = result.added[0] if len(result.added) == 1 else None
+        if task and result.ask_building:
+            lines.append("\nکدوم ساختمون؟")
+            markup = building_keyboard(task.id)
+            if result.ask_when:
+                self.asking_when.add(task.id)
+        elif task and result.ask_when:
+            lines.append("\n" + REMIND_QUESTION)
+            markup = remind_keyboard(task.id)
+            self.awaiting_when = task.id
+        elif task and task.board != "construction":
+            markup = InlineKeyboardMarkup([[InlineKeyboardButton("🏷 تغییر ساختمون", callback_data=f"c:{task.id}:?")]])
+        await update.message.reply_text("\n".join(lines), reply_markup=markup)
 
     async def voice(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
@@ -275,6 +352,35 @@ class Bot:
             self.city.delegate(task_id, now)
             await query.answer()
             await query.edit_message_text(f"{query.message.text}\n\n👥 سپرده شد به پرسنل. فردا صبح پیگیرش می‌شم.")
+        elif action == "w":
+            self.awaiting_when = None
+            when = self.city.remind(task_id, rest[0], now)
+            await query.answer("باشه")
+            text = f"⏰ {when} یادت میندازم." if rest[0] != "none" else "🏗 بدون یادآوری، رفت توی صف ساختمونش."
+            await query.edit_message_text(f"✅ {label(task.building)}: {task.title}\n{text}")
+        elif action == "c":
+            await query.answer()
+            if rest[0] == "?":
+                await query.edit_message_reply_markup(building_keyboard(task_id))
+                return
+            task = self.city.set_building(task_id, rest[0])
+            text = f"✅ {label(task.building)}: {task.title}"
+            if task_id in self.asking_when or self.awaiting_when == task_id:
+                self.asking_when.discard(task_id)
+                self.awaiting_when = task_id
+                await query.edit_message_text(f"{text}\n\n{REMIND_QUESTION}", reply_markup=remind_keyboard(task_id))
+            else:
+                await query.edit_message_text(text)
+        elif action == "x":
+            self.awaiting_split = task_id
+            await query.answer()
+            await query.message.reply_text(
+                f"«{task.title}»\nاولین قدم ۱۵ دقیقه‌ای‌ش چیه؟ همینجا بنویس، مثلاً «فقط لیست کلینیک‌ها رو باز کنم»."
+            )
+        elif action == "r":
+            self.city.drop(task_id, now)
+            await query.answer("حذف شد")
+            await query.edit_message_text(f"{query.message.text}\n\n🗑 حذف شد. یه بار از ذهنت هم برداشتیمش.")
         elif action == "m":
             minutes = int(rest[0])
             if minutes:
@@ -295,7 +401,7 @@ class Bot:
         for m in messages:
             markup = None
             if m.task_id:
-                markup = task_keyboard(m.task_id)
+                markup = stuck_keyboard(m.task_id) if m.stuck else task_keyboard(m.task_id)
             elif m.done_buttons:
                 markup = done_keyboard([t.id for t in m.done_buttons])
             await ctx.bot.send_message(chat_id, m.text, reply_markup=markup)

@@ -8,6 +8,18 @@ follows up on tasks at the right moment, and learns how you work.
 
 ## What it does
 
+- **Quick capture**: write any thought as it comes. Without Claude it still guesses the building from
+  its words (کراکس، محتوا، اسمارتو، کلینیک...) and reads times like «فردا ساعت ۶ عصر» or «پنجشنبه».
+  If the building is unclear it shows a building picker; if there is no time it asks when to remind
+  (in an hour, 18:00, 21:00, tomorrow, this week, no reminder, or a typed time). «ایده: ...» goes to the
+  ideas vault with no reminder.
+- **Keeping the day**: a build streak (days in a row with at least one ✅) in the morning and evening.
+  If you have not opened the bot three hours after the morning brief, it pings with today's most
+  important task. Two hours before the evening wrap-up, if nothing is done yet, it offers one task.
+- **Stuck tasks**: after 3 postpones the nudge offers ✂️ shrink it (you write a 15-minute first step
+  and the big task waits under construction), 👥 give to staff, or 🗑 drop.
+- **Weekly review** (`REVIEW_DAY`, Friday) with the morning brief: floors per building, priority
+  buildings left alone this week, the most postponed tasks, and ideas waiting in the vault.
 - **Morning brief** (default 10:30): top 3 tasks, one waiting item, overdue work, one thing not to do today.
 - **Nudges** at a task's own time, or at the hour you usually do that kind of work once it has learned it.
   One tap answers: ✅ done, ⏰ 30 min / 1 hour / tonight / tomorrow, 🧱 stuck, 👥 give to staff.
@@ -30,7 +42,8 @@ follows up on tasks at the right moment, and learns how you work.
 - **Content buffer**: pieces filmed and waiting to go out. 3 or more is healthy, 2 means catch up, 0 or 1 is an emergency.
 - **Daily digest**: the morning brief and `/tasks` list the buildings waiting for their next step,
   in `BUILDING_PRIORITY` order (Media Hub, Retail, SmartO, Marketing by default).
-- **Evening wrap-up** (23:00): what got built, unfinished tasks move to tomorrow.
+- **Evening wrap-up** (23:00): what got built, unfinished tasks move to tomorrow with a ✅ button each
+  in case one was actually done.
 - **Learning**: every task logs when it was planned, when it was really done, how often it was pushed back and how long it took. `/profile` shows what it learned; tell it rules like «جمعه‌ها کار سایت نمی‌کنم».
 - **The city**: each ✅ adds a floor to its building; overdue work puts scaffolding on it (`/city`).
 

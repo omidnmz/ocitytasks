@@ -255,3 +255,94 @@ def test_production_day_opens_with_the_batch_and_buffer_counts_filmed_pieces(cit
     filming = [t for t in city.db.open_tasks() if t.kind == "filming"][0]
     city.done(filming.id, at(3, 12))
     assert city.content_buffer(at(3, 13)) == 1
+
+
+# --- the assistant: capture, reminders, keeping the day ----------------------
+
+def test_capture_guesses_building_and_reads_time(city):
+    r = city.handle_message("فردا ساعت ۶ عصر به مشتری کراکس زنگ بزنم", at(11, 16))
+    t = r.added[0]
+    assert (t.building, t.due_date, t.due_time) == ("retail", "2026-11-12", "18:00")
+    assert not r.ask_building and not r.ask_when
+    assert "فردا ساعت 18:00" in r.reply
+
+
+def test_capture_asks_building_and_time_when_unclear(city):
+    r = city.handle_message("بیمه ماشین", at(11, 16))
+    assert r.ask_building and r.ask_when
+    t = city.set_building(r.added[0].id, "personal")
+    assert t.building == "personal"
+
+
+def test_idea_goes_to_the_vault_without_reminder(city):
+    r = city.handle_message("ایده: ویدیوی پشت صحنه کلینیک", at(11, 16))
+    t = r.added[0]
+    assert (t.building, t.board, t.next_nudge_at) == ("vault", "construction", None)
+    assert not r.ask_when
+
+
+def test_reminder_buttons_and_typed_time(city):
+    t = city.handle_message("تدوین ریل سایز", at(11, 16)).added[0]
+    assert city.remind(t.id, "evening", at(11, 16)) == "امروز ساعت 18:00"
+    assert city.local(datetime.fromisoformat(city.db.get_task(t.id).next_nudge_at)).time() == time(18, 0)
+    assert city.remind_from_text(t.id, "پنجشنبه ساعت ۵", at(11, 16)) == "فردا ساعت 17:00"
+    assert city.remind_from_text(t.id, "باشه", at(11, 16)) is None
+    city.remind(t.id, "none", at(11, 16))
+    task = city.db.get_task(t.id)
+    assert (task.board, task.next_nudge_at) == ("construction", None)
+
+
+def test_stuck_task_is_flagged_and_can_be_split(city):
+    t = city.add("لیست کلینیک‌ها", "technician", now=at(11, 9), due_time="12:00")
+    for _ in range(3):
+        city.snooze(t.id, "30", at(11, 12))
+    msgs = [m for m in city.tick(at(11, 12, 31)) if m.task_id == t.id]
+    assert msgs and msgs[0].stuck and "عقب افتاده" in msgs[0].text
+    step = city.split(t.id, "فقط ۵ تا کلینیک رو اسم ببرم", at(11, 13))
+    assert step.building == "technician" and step.next_nudge_at
+    assert city.db.get_task(t.id).board == "construction"
+
+
+def test_streak_counts_days_in_a_row(city):
+    for day in (8, 9, 10):
+        t = city.add("کار", "media", now=at(day, 9))
+        city.done(t.id, at(day, 12))
+    assert city.streak(at(11, 9)) == 3
+    assert "نشکنه" in city.streak_line(at(11, 9))
+    t = city.add("کار", "media", now=at(11, 9))
+    city.done(t.id, at(11, 12))
+    assert city.streak(at(11, 13)) == 4
+
+
+def test_away_ping_and_rescue_nudge(city):
+    city.add("ضبط ریل", "media", now=at(11, 9))
+    city.tick(at(11, 10, 30))  # morning brief
+    msgs = city.tick(at(11, 13, 30))
+    assert any("سر نزدی" in m.text for m in msgs)
+    msgs = city.tick(at(11, 21, 0))
+    assert any("هیچ طبقه‌ای" in m.text for m in msgs)
+
+
+def test_no_away_ping_when_mayor_showed_up(city):
+    city.add("ضبط ریل", "media", now=at(11, 9))
+    city.tick(at(11, 10, 30))
+    city.seen(at(11, 11))
+    t = city.add("کار", "media", now=at(11, 11))
+    city.done(t.id, at(11, 12))
+    assert not any("سر نزدی" in m.text for m in city.tick(at(11, 13, 30)))
+    assert not any("هیچ طبقه‌ای" in m.text for m in city.tick(at(11, 21, 0)))
+
+
+def test_evening_lists_carried_tasks_with_buttons(city):
+    t = city.add("آپدیت سایت", "retail", now=at(11, 9))
+    msgs = [m for m in city.tick(at(11, 23, 0)) if "جمع‌بندی" in m.text]
+    assert msgs and [x.id for x in msgs[0].done_buttons] == [t.id]
+
+
+def test_weekly_review_on_review_day(city):
+    t = city.add("ریل", "media", now=at(10, 9))
+    city.done(t.id, at(10, 12))
+    city.add("دامین", "smarto", "construction", now=at(10, 9))
+    msgs = city.tick(at(13, 10, 30))  # friday
+    review = [m for m in msgs if "مرور هفته" in m.text]
+    assert review and "دست نخوردن" in review[0].text

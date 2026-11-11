@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
-from . import learning
+from . import capture, learning
 from .ai import AI, ContentItem
 from .buildings import BUILDINGS, CONTENT_SPRINT_STEPS, STARTER_TASKS, label
 from .config import Config
@@ -21,6 +21,9 @@ log = logging.getLogger(__name__)
 
 RENUDGE_HIGH_AFTER = timedelta(hours=2)
 SPRINT_DAYS = 3
+STUCK_AFTER = 3  # postpones before City Hall offers to shrink or hand off a task
+AWAY_AFTER = timedelta(hours=3)  # after the morning brief, ping if the Mayor has not shown up
+RESCUE_BEFORE_EVENING = timedelta(hours=2)  # nothing done yet? offer one small task
 
 
 PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
@@ -69,6 +72,7 @@ def parse_plan_table(text: str) -> list[ContentItem]:
 class Outgoing:
     text: str
     task_id: int | None = None  # attach snooze/done buttons for one task
+    stuck: bool = False  # the task keeps getting postponed: offer to shrink, hand off or drop it
     done_buttons: list[Task] = field(default_factory=list)  # one ✅ per task
 
 
@@ -76,6 +80,8 @@ class Outgoing:
 class Result:
     reply: str
     added: list[Task] = field(default_factory=list)
+    ask_building: bool = False  # could not tell which building: show the building picker
+    ask_when: bool = False  # no time given: ask when to remind
 
 
 class CityHall:
@@ -160,16 +166,90 @@ class CityHall:
             task = self.db.get_task(task.id)
         return task
 
+    def capture(self, text: str, now: datetime) -> Result:
+        """A new thought, understood without Claude: guess the building, read any time in it."""
+        local = self.local(now)
+        building = capture.guess_building(text)
+        when = capture.parse_when(text, local.date(), local.time())
+        if building == "vault":
+            task = self.add(text, "vault", "construction", now=now)
+            return Result(f"💡 رفت توی {label('vault')}. توی مرور هفته یادت میارم.", [task])
+        task = self.add(
+            text, building or "cityhall", now=now,
+            due_date=when.day.isoformat() if when.day else None,
+            due_time=f"{when.at:%H:%M}" if when.at else None,
+        )
+        reply = f"ثبت شد توی {label(task.building)} ✅" if building else "ثبت شد ✅"
+        if when.found:
+            reply += f"\n⏰ یادآوری: {capture.describe_when(when.day, when.at, local.date())}"
+        return Result(reply, [task], ask_building=building is None, ask_when=not when.found)
+
+    def set_building(self, task_id: int, building: str) -> Task:
+        if building in BUILDINGS:
+            self.db.update_task(task_id, building=building)
+        return self.db.get_task(task_id)
+
+    def schedule(self, task_id: int, day: date | None, at: time | None, now: datetime) -> str:
+        """Set when to remind about a task; returns how City Hall describes that time."""
+        today = self.local(now).date()
+        if day is None:
+            self.db.update_task(task_id, board="construction", due_date=None, due_time=None, next_nudge_at=None)
+        else:
+            self.db.update_task(
+                task_id, board="today", due_date=day.isoformat(),
+                due_time=f"{at:%H:%M}" if at else None, next_nudge_at=None,
+            )
+            nudge = self.first_nudge(self.db.get_task(task_id), now)
+            self.db.update_task(task_id, next_nudge_at=nudge)
+        self.db.log(task_id, "scheduled", now=now, day=day.isoformat() if day else None)
+        return capture.describe_when(day, at, today)
+
+    def remind(self, task_id: int, option: str, now: datetime) -> str:
+        """A reminder button: 1h, evening, tonight, tomorrow, week, none."""
+        local = self.local(now)
+        today = local.date()
+        task = self.db.get_task(task_id)
+        if option == "1h":
+            soon = local + timedelta(hours=1)
+            return self.schedule(task_id, soon.date(), soon.time().replace(second=0, microsecond=0), now)
+        if option in ("evening", "tonight"):
+            at = time(18, 0) if option == "evening" else time(21, 0)
+            day = today if local.time() < at else today + timedelta(days=1)
+            return self.schedule(task_id, day, at, now)
+        if option == "tomorrow":
+            at = learning.suggest_time(task, self.profile()) or time(11, 0)
+            return self.schedule(task_id, today + timedelta(days=1), at, now)
+        if option == "week":
+            return self.schedule(task_id, today + timedelta(days=2), None, now)
+        return self.schedule(task_id, None, None, now)
+
+    def remind_from_text(self, task_id: int, text: str, now: datetime) -> str | None:
+        """«پنجشنبه ساعت ۵» typed after the reminder question. None if no time was found."""
+        local = self.local(now)
+        when = capture.parse_when(text, local.date(), local.time())
+        if not when.found:
+            return None
+        return self.schedule(task_id, when.day, when.at, now)
+
+    def split(self, task_id: int, first_step: str, now: datetime) -> Task:
+        """A stuck task becomes a small first step for today; the big one waits under construction."""
+        big = self.db.get_task(task_id)
+        self.db.update_task(task_id, board="construction", due_date=None, next_nudge_at=None)
+        self.db.log(task_id, "split", now=now)
+        step = self.add(f"{first_step} (قدم اول: {big.title})", big.building, now=now, kind=big.kind)
+        if not step.next_nudge_at:
+            soon = self.local(now) + timedelta(hours=1)
+            self.schedule(step.id, soon.date(), soon.time().replace(second=0, microsecond=0), now)
+        return self.db.get_task(step.id)
+
     def handle_message(self, text: str, now: datetime) -> Result:
         if not self.ai:
-            task = self.add(text, now=now)
-            return Result(f"ثبت شد توی {label(task.building)} ✅", [task])
+            return self.capture(text, now)
         try:
             plan = self.ai.understand(text, self.context(now), self.local(now))
         except Exception:
-            log.exception("Claude failed; saving the message as a plain task")
-            task = self.add(text, now=now)
-            return Result(f"ثبت شد توی {label(task.building)} ✅", [task])
+            log.exception("Claude failed; reading the message without it")
+            return self.capture(text, now)
 
         added = []
         for t in plan.add_tasks:
@@ -183,7 +263,8 @@ class CityHall:
                 self.done(task_id, now)
         for rule in plan.add_rules:
             self.db.add_rule(rule)
-        return Result(plan.reply, added)
+        ask = len(added) == 1 and added[0].board == "today" and not added[0].due_time
+        return Result(plan.reply, added, ask_when=ask)
 
     def import_content_plan(self, text: str, now: datetime) -> Result:
         items = parse_plan_table(text)
@@ -341,22 +422,127 @@ class CityHall:
         if local.time() >= self.cfg.morning_time and self.db.get_state("last_morning") != today:
             self.db.set_state("last_morning", today)
             out.append(Outgoing(self.morning_brief(now)))
+            if local.weekday() == self.cfg.review_day:
+                out.append(Outgoing(self.weekly_review(now)))
             out.extend(self.weekly_cycle(now))
             out.extend(self.todays_scripts(now))
 
         for task in self.db.tasks_due_for_nudge(now):
-            out.append(Outgoing(self.nudge_text(task, now), task_id=task.id))
+            stuck = task.postpone_count >= STUCK_AFTER
+            out.append(Outgoing(self.nudge_text(task, now), task_id=task.id, stuck=stuck))
             renudge = now + RENUDGE_HIGH_AFTER if task.priority == "high" and task.nudge_count == 0 else None
             self.db.update_task(task.id, nudge_count=task.nudge_count + 1, next_nudge_at=renudge)
             self.db.log(task.id, "nudged", now=now)
 
         out.extend(self.mission_followups(now))
         out.extend(self.checkins(now))
+        out.extend(self.keep_the_day(now))
 
         if local.time() >= self.cfg.evening_time and self.db.get_state("last_evening") != today:
             self.db.set_state("last_evening", today)
-            out.append(Outgoing(self.evening_wrap(now)))
+            carried = self.carry_over(now)
+            out.append(Outgoing(self.evening_wrap(now, carried), done_buttons=carried[:6]))
         return out
+
+    # --- making sure the day is not lost ---------------------------------
+    def seen(self, now: datetime) -> None:
+        """The Mayor wrote or tapped something."""
+        self.db.set_state("last_seen", now.isoformat())
+
+    def done_days(self) -> set[date]:
+        return {self.local(parse_iso(t.done_at)).date() for t in self.db.done_tasks() if t.done_at}
+
+    def streak(self, now: datetime) -> int:
+        """Days in a row with at least one floor built; today counts once something is done."""
+        days = self.done_days()
+        day = self.local(now).date()
+        if day not in days:
+            day -= timedelta(days=1)
+        n = 0
+        while day in days:
+            n += 1
+            day -= timedelta(days=1)
+        return n
+
+    def streak_line(self, now: datetime) -> str:
+        n = self.streak(now)
+        today_done = self.local(now).date() in self.done_days()
+        if n == 0:
+            return "🔥 زنجیره ساخت: امروز با یه کار کوچیک شروعش کن."
+        if today_done:
+            return f"🔥 زنجیره ساخت: {n} روز پشت سر هم"
+        return f"🔥 زنجیره ساخت: {n} روز. امروز یه طبقه بساز که نشکنه."
+
+    def top_task(self, now: datetime) -> Task | None:
+        today = self.local(now).date().isoformat()
+        due = [
+            t for t in self.db.open_tasks()
+            if t.board == "today" and (t.due_date or today) <= today and not t.delegated
+        ]
+        order = {k: i for i, k in enumerate(self.cfg.building_priority)}
+        due.sort(key=lambda t: (t.priority != "high", order.get(t.building, 99), t.due_date or "", t.id))
+        return due[0] if due else None
+
+    def keep_the_day(self, now: datetime) -> list[Outgoing]:
+        """Ping when the Mayor has not shown up by midday, and rescue a day with nothing built."""
+        out = []
+        local = self.local(now)
+        today = local.date()
+        morning = self.at_local(today, self.cfg.morning_time)
+        last_seen = parse_iso(self.db.get_state("last_seen"))
+        away_at = morning + AWAY_AFTER
+        key = f"away:{today}"
+        if now >= away_at and not self.db.get_state(key):
+            self.db.set_state(key, "1")
+            if now < away_at + timedelta(minutes=30) and (last_seen is None or last_seen < morning):
+                top = self.top_task(now)
+                text = "🏛 شهردار، امروز هنوز به شهرداری سر نزدی. شهر منتظر قدم امروزته."
+                if top:
+                    text += f"\n\nمهم‌ترین کار امروز:\n{label(top.building)}: {top.title}"
+                out.append(Outgoing(text + "\n\nگزارش کامل: /tasks", task_id=top.id if top else None))
+        rescue_at = self.at_local(today, self.cfg.evening_time) - RESCUE_BEFORE_EVENING
+        key = f"rescue:{today}"
+        if now >= rescue_at and not self.db.get_state(key):
+            self.db.set_state(key, "1")
+            if now < rescue_at + timedelta(minutes=30) and today not in self.done_days():
+                top = self.top_task(now)
+                if top:
+                    n = self.streak(now)
+                    keep = f" تا زنجیره {n} روزه‌ت نشکنه" if n else ""
+                    out.append(Outgoing(
+                        f"🧱 امروز هنوز هیچ طبقه‌ای ساخته نشده. فقط همین یکی{keep}:\n"
+                        f"{label(top.building)}: {top.title}",
+                        task_id=top.id,
+                    ))
+        return out
+
+    def weekly_review(self, now: datetime) -> str:
+        """Once a week: what each building got, which ones were left alone, ideas waiting."""
+        local = self.local(now)
+        start = self.at_local(local.date() - timedelta(days=7), time(0, 0))
+        done = self.db.done_between(start, now + timedelta(seconds=1))
+        per = {}
+        for t in done:
+            per[t.building] = per.get(t.building, 0) + 1
+        open_ = self.db.open_tasks()
+        lines = [f"📊 مرور هفته: {len(done)} طبقه ساخته شد", ""]
+        for key, n in sorted(per.items(), key=lambda kv: -kv[1]):
+            lines.append(f"{label(key)}: {n}")
+        idle = [
+            k for k in self.cfg.building_priority
+            if k in BUILDINGS and not per.get(k) and any(t.building == k for t in open_)
+        ]
+        if idle:
+            lines += ["", "🕸 این هفته دست نخوردن: " + "، ".join(label(k) for k in idle)]
+        stuck = [t for t in open_ if t.postpone_count >= STUCK_AFTER][:3]
+        if stuck:
+            lines += ["", "🐢 بیشتر از همه عقب افتادن:"]
+            lines += [f"#{t.id} {label(t.building)}: {t.title} ({t.postpone_count} بار)" for t in stuck]
+        ideas = [t for t in open_ if t.building == "vault"]
+        if ideas:
+            lines += ["", f"💡 {len(ideas)} ایده توی گنجینه منتظره. اگه یکی‌ش وقتشه، بگو بیارمش توی کارها."]
+        lines += ["", self.streak_line(now)]
+        return "\n".join(lines)
 
     def todays_scripts(self, now: datetime) -> list[Outgoing]:
         """On the day a filming or publish task is due, hand over its script."""
@@ -397,6 +583,9 @@ class CityHall:
         overdue = task.due_date and task.due_date < self.local(now).date().isoformat()
         prefix = "⏰ عقب افتاده: " if overdue else ("🔁 دوباره: " if task.nudge_count else "")
         text = f"{prefix}{label(task.building)}\n{task.title}\nرسیدی؟"
+        if task.postpone_count >= STUCK_AFTER:
+            text += (f"\n\n🐢 این کار {task.postpone_count} بار عقب افتاده. "
+                     "کوچیکش کنیم، بدیمش به پرسنل یا کلاً حذفش کنیم؟")
         if task.notes:
             text += f"\n\n📝 {task.notes}"
         return text[:4000]
@@ -452,6 +641,7 @@ class CityHall:
             lines.append("Often postponed: " + ", ".join(postponed))
         lines.append("\nBuilding priority (grow first): " + ", ".join(self.cfg.building_priority))
         lines.append(f"Content buffer (filmed, not yet published): {self.content_buffer(now)}")
+        lines.append(f"Build streak (days in a row with something done): {self.streak(now)}")
         rules = self.db.rules()
         if rules:
             lines.append("\nMayor's rules:\n" + "\n".join(f"- {r}" for r in rules))
@@ -466,29 +656,36 @@ class CityHall:
         return self.template_morning(now)
 
     def template_morning(self, now: datetime) -> str:
-        return "☀️ صبح بخیر شهردار!\n\n" + self.tasks_view(now)
+        return "☀️ صبح بخیر شهردار!\n" + self.streak_line(now) + "\n\n" + self.tasks_view(now)
 
-    def evening_wrap(self, now: datetime) -> str:
+    def carry_over(self, now: datetime) -> list[Task]:
+        """Unfinished tasks of today move to tomorrow."""
         local = self.local(now)
-        start = self.at_local(local.date(), time(0, 0))
         tomorrow = (local.date() + timedelta(days=1)).isoformat()
         today = local.date().isoformat()
-        carried = 0
+        carried = []
         for t in self.db.open_tasks():
             if t.board == "today" and t.due_date and t.due_date <= today:
                 self.db.update_task(t.id, due_date=tomorrow, postpone_count=t.postpone_count + 1)
                 self.db.log(t.id, "carried", now=now)
-                carried += 1
+                carried.append(self.db.get_task(t.id))
+        return carried
+
+    def evening_wrap(self, now: datetime, carried: list[Task] | None = None) -> str:
+        local = self.local(now)
+        carried = carried or []
         if self.ai:
             try:
                 return self.ai.brief("evening", self.context(now), local)
             except Exception:
                 log.exception("Claude wrap failed; using template")
+        start = self.at_local(local.date(), time(0, 0))
         done = self.db.done_between(start, now + timedelta(seconds=1))
-        return (
-            f"🌙 جمع‌بندی امروز: {len(done)} طبقه ساخته شد"
-            + (f" و {carried} کار رفت برای فردا." if carried else ".")
-        )
+        lines = [f"🌙 جمع‌بندی امروز: {len(done)} طبقه ساخته شد.", self.streak_line(now)]
+        if carried:
+            lines += ["", f"این‌ها رفت برای فردا ({len(carried)}). اگه یکی‌ش انجام شده، تیکش رو بزن:"]
+            lines += [f"#{t.id} {BUILDINGS[t.building].emoji} {t.title}" for t in carried[:6]]
+        return "\n".join(lines)
 
     # --- views -----------------------------------------------------------
     def city_view(self, now: datetime) -> str:
