@@ -7,13 +7,14 @@ wrap-up. Button presses come back through `done`, `snooze`, `block`, `delegate`.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from . import capture, learning
 from .ai import AI, ContentItem
-from .buildings import BUILDINGS, CONTENT_SPRINT_STEPS, STARTER_TASKS, label
+from .buildings import BUILDINGS, CONTENT_SPRINT_STEPS, DEFAULT_BUILDINGS, STARTER_TASKS, configure, label
 from .config import Config
 from .db import DB, Task, parse_iso
 
@@ -84,12 +85,58 @@ class Result:
     ask_when: bool = False  # no time given: ask when to remind
 
 
+def clean_emoji(s: str | None) -> str:
+    """A building's sign: a few characters, nothing that could be read as markup."""
+    return "".join(c for c in (s or "") if c not in "<>&\"'").strip()[:4]
+
+
 class CityHall:
     def __init__(self, db: DB, cfg: Config, ai: AI | None = None):
         self.db = db
         self.cfg = cfg
         self.ai = ai
         self.tz = cfg.timezone
+        self.load_buildings()
+
+    # --- the Mayor's own building settings --------------------------------
+    def building_settings(self) -> dict[str, dict]:
+        return json.loads(self.db.get_state("buildings") or "{}")
+
+    def load_buildings(self) -> None:
+        configure(self.building_settings())
+        stored = self.db.get_state("building_priority")
+        if stored is not None:
+            self.cfg.building_priority = [k for k in json.loads(stored) if k in BUILDINGS]
+
+    def update_building(self, key: str, name: str | None = None, emoji: str | None = None,
+                        priority: bool | None = None) -> None:
+        if key not in BUILDINGS:
+            raise KeyError(key)
+        settings = self.building_settings()
+        entry = settings.setdefault(key, {})
+        if name and name.strip():
+            entry["name"] = name.strip()[:30]
+        if emoji and clean_emoji(emoji):
+            entry["emoji"] = clean_emoji(emoji)
+        self.db.set_state("buildings", json.dumps(settings, ensure_ascii=False))
+        if priority is not None:
+            order = [k for k in self.cfg.building_priority if k != key]
+            if priority:
+                order.append(key)
+            self.cfg.building_priority = order
+            self.db.set_state("building_priority", json.dumps(order))
+        self.load_buildings()
+
+    def add_building(self, name: str, emoji: str = "🏢") -> str:
+        settings = self.building_settings()
+        n = 1
+        while f"c{n}" in BUILDINGS or f"c{n}" in settings:
+            n += 1
+        key = f"c{n}"
+        settings[key] = {"name": name.strip()[:30] or "ساختمون جدید", "emoji": clean_emoji(emoji) or "🏢", "custom": True}
+        self.db.set_state("buildings", json.dumps(settings, ensure_ascii=False))
+        self.load_buildings()
+        return key
 
     # --- time helpers ----------------------------------------------------
     def local(self, now: datetime) -> datetime:
@@ -864,6 +911,7 @@ class CityHall:
                 "key": key, "name": b.name, "emoji": b.emoji, "floors": floors.get(key, 0),
                 "open": len(mine), "overdue": sum(1 for t in mine if task_json(t)["overdue"]),
                 "priority": key in self.cfg.building_priority,
+                "custom": key not in DEFAULT_BUILDINGS,
                 "tasks": [task_json(t) for t in mine[:12]],
             })
         has_content = any(t.kind == "publish" for t in open_)

@@ -112,7 +112,9 @@ pytest
 
 Set `WEBAPP_URL` and the bot also serves a graphical city inside Telegram: towers per building,
 scaffolding on overdue work, today's tasks with one-tap done, snooze, staff and delete, and a
-new-task form. Setup on a Windows server with a Cloudflare Tunnel: `docs/mini-app.md`.
+new-task form. The Buildings tab lists every building with its stage; there you can rename a
+building, change its emoji, star it as a priority, or add a new one. Setup on a Windows server:
+`docs/mini-app.md`.
 
 ## Not in this version yet
 

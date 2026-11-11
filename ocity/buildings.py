@@ -30,6 +30,18 @@ BUILDINGS: dict[str, Building] = {
 }
 
 BUILDING_KEYS = tuple(BUILDINGS)
+DEFAULT_BUILDINGS = dict(BUILDINGS)
+
+
+def configure(settings: dict[str, dict]) -> None:
+    """Apply the Mayor's renames, emoji changes and own buildings on top of the defaults."""
+    BUILDINGS.clear()
+    BUILDINGS.update(DEFAULT_BUILDINGS)
+    for key, s in settings.items():
+        base = BUILDINGS.get(key)
+        name = (s.get("name") or (base.name if base else key)).strip()
+        emoji = (s.get("emoji") or (base.emoji if base else "🏢")).strip()
+        BUILDINGS[key] = Building(key, name, emoji, base.bridges if base else ())
 
 
 def label(key: str) -> str:

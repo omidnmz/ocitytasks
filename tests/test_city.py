@@ -370,3 +370,21 @@ def test_empty_today_suggests_next_step(city):
     city.add("دامین", "smarto", "construction", now=at(11, 9))
     text, items = city.today_view(at(11, 10))
     assert not items and "دامین" in text
+
+
+def test_buildings_can_be_renamed_prioritised_and_added():
+    from ocity.buildings import BUILDINGS
+    db = DB(":memory:")
+    city = CityHall(db, Config())
+    city.update_building("media", name="  مدیا  ", emoji="📹", priority=False)
+    assert BUILDINGS["media"].name == "مدیا" and BUILDINGS["media"].emoji == "📹"
+    assert "media" not in city.cfg.building_priority
+    key = city.add_building("آشپزخونه", "🍳")
+    assert key == "c1" and BUILDINGS[key].name == "آشپزخونه"
+    assert city.add_building("دومی") == "c2"
+    # a fresh city hall on the same database remembers the Mayor's choices
+    again = CityHall(db, Config())
+    assert BUILDINGS["media"].name == "مدیا" and "media" not in again.cfg.building_priority and "c2" in BUILDINGS
+    # and another database starts from the defaults
+    CityHall(DB(":memory:"), Config())
+    assert BUILDINGS["media"].name != "مدیا" and "c1" not in BUILDINGS
