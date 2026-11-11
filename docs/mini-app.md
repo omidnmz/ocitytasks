@@ -9,7 +9,22 @@ on `127.0.0.1:8080` on your server, and a Cloudflare Tunnel gives it a secure pu
 without opening any port. Every request is checked against Telegram's signature and your
 chat id, so nobody else can read or change your city.
 
-## Windows server, step by step
+## Option A: Caddy is already on the server (no domain needed)
+
+If the server already runs Caddy for another Mini App (for example `C:\tools\Caddyfile`),
+use a free `sslip.io` name that points at the server's IP. With the IP `46.249.98.106`:
+
+1. Add to the end of the Caddyfile:
+   ```
+   city.46-249-98-106.sslip.io {
+       reverse_proxy 127.0.0.1:8080
+   }
+   ```
+2. Restart Caddy: `C:\tools\nssm.exe restart caddy`. It gets the https certificate by itself.
+3. Add `WEBAPP_URL=https://city.46-249-98-106.sslip.io` to `C:\ocitytasks\.env` and restart the bot
+   (step 6 below).
+
+## Option B: Cloudflare Tunnel, step by step
 
 You need a domain whose DNS is on Cloudflare (the free plan is enough). The city will live on a
 subdomain such as `city.example.com`.
