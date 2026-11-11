@@ -6,7 +6,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -35,8 +35,11 @@ HELP = """🏛 شهرداری OCity
 «جمعه‌ها کار سایت نمی‌کنم»
 
 دستورها:
-/today گزارش امروز
-/tasks گزارش امروز و قدم بعدی هر ساختمون
+دکمه‌های پایین صفحه همین کارها رو می‌کنن. توی «کارهای امروز» روی هر کار بزن تا انجامش بدی، عقبش بندازی یا حذفش کنی.
+
+/tasks کارهای امروز
+/buildings قدم بعدی هر ساختمون
+/today گزارش کامل امروز
 /all همه کارهای باز
 /city وضعیت شهر و طبقه‌ها
 /profile چیزهایی که از روال کارت یاد گرفتم
@@ -51,6 +54,39 @@ HELP = """🏛 شهرداری OCity
 شنبه و سه‌شنبه روز ضبط دسته‌ای با سناریوها.
 بقیه هفته فقط انتشار رو یادآوری می‌کنم.
 هدف: همیشه ۳ محتوای آماده‌ی انتشار جلوتر باشیم."""
+
+
+# The menu that stays under the chat, so nothing has to be typed as a command
+MENU_TODAY = "📌 کارهای امروز"
+MENU_BUILDINGS = "🏗 ساختمون‌ها"
+MENU_BRIEF = "☀️ گزارش کامل"
+MENU_CITY = "🏙 شهر"
+MENU_ALL = "📋 همه کارها"
+MENU_PLAN = "🎬 برنامه محتوا"
+MENU_PROFILE = "🧠 روال من"
+MENU_HELP = "❓ راهنما"
+MENU = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton(MENU_TODAY), KeyboardButton(MENU_BUILDINGS)],
+        [KeyboardButton(MENU_BRIEF), KeyboardButton(MENU_ALL)],
+        [KeyboardButton(MENU_PLAN), KeyboardButton(MENU_CITY)],
+        [KeyboardButton(MENU_PROFILE), KeyboardButton(MENU_HELP)],
+    ],
+    resize_keyboard=True,
+    is_persistent=True,
+    input_field_placeholder="کار جدید رو بنویس...",
+)
+COMMANDS = [
+    BotCommand("tasks", "کارهای امروز"),
+    BotCommand("buildings", "قدم بعدی ساختمون‌ها"),
+    BotCommand("today", "گزارش کامل امروز"),
+    BotCommand("all", "همه کارهای باز"),
+    BotCommand("plan", "فرستادن برنامه محتوا"),
+    BotCommand("city", "وضعیت شهر"),
+    BotCommand("profile", "روال کاری من"),
+    BotCommand("menu", "نشون دادن منو"),
+    BotCommand("help", "راهنما"),
+]
 
 
 def now_utc() -> datetime:
@@ -70,6 +106,7 @@ def task_keyboard(task_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🧱 گیر کردم", callback_data=f"b:{task_id}"),
             InlineKeyboardButton("👥 پرسنل", callback_data=f"g:{task_id}"),
         ],
+        [InlineKeyboardButton("🗑 حذف این کار", callback_data=f"r:{task_id}")],
     ])
 
 
@@ -108,6 +145,26 @@ def building_keyboard(task_id: int) -> InlineKeyboardMarkup:
         for key, b in BUILDINGS.items()
     ]
     return InlineKeyboardMarkup([buttons[i:i + 2] for i in range(0, len(buttons), 2)])
+
+
+def today_keyboard(tasks) -> InlineKeyboardMarkup:
+    """One button per task; tapping it opens that task's done/snooze options."""
+    rows = []
+    for t in tasks:
+        title = t.title if len(t.title) <= 34 else t.title[:32] + "…"
+        rows.append([InlineKeyboardButton(f"{BUILDINGS[t.building].emoji} {title}", callback_data=f"o:{t.id}")])
+    return InlineKeyboardMarkup(rows)
+
+
+CLEANUP_LIMIT = 60
+
+
+def cleanup_keyboard(tasks) -> InlineKeyboardMarkup:
+    rows = []
+    for t in tasks[:CLEANUP_LIMIT]:
+        title = t.title if len(t.title) <= 34 else t.title[:32] + "…"
+        rows.append([InlineKeyboardButton(f"🗑 #{t.id} {title}", callback_data=f"k:{t.id}")])
+    return InlineKeyboardMarkup(rows)
 
 
 def done_keyboard(task_ids: list[int]) -> InlineKeyboardMarkup:
@@ -161,12 +218,21 @@ class Bot:
             "سلام شهردار! 🏛 شهرداری راه افتاد.\n\n"
             "چند کار شروع رو از وضعیت فعلیت ثبت کردم و اسپرینت سه‌روزه محتوا رو شروع کردم "
             "تا برنامه و تولید محتوای چند روزت رو یکجا جلو ببریم.\n\n"
-            "قدم اول: برنامه محتوای ماهانه و جدول محتوای آماده‌ت رو با /plan برام بفرست.\n\n" + HELP
+            "قدم اول: برنامه محتوای ماهانه و جدول محتوای آماده‌ت رو با /plan برام بفرست.\n\n" + HELP,
+            reply_markup=MENU,
         )
 
     async def help(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
-            await update.message.reply_text(HELP)
+            await update.message.reply_text(HELP, reply_markup=MENU)
+
+    async def menu(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if self.is_owner(update):
+            await update.message.reply_text("منو پایین صفحه‌ست 👇", reply_markup=MENU)
+
+    async def buildings(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if self.is_owner(update):
+            await update.message.reply_text(self.city.buildings_view(now_utc())[:4000])
 
     async def today(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
@@ -175,14 +241,17 @@ class Bot:
 
     async def tasks(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
-            await update.message.reply_text(self.city.tasks_view(now_utc())[:4000])
+            text, items = self.city.today_view(now_utc())
+            await update.message.reply_text(text, reply_markup=today_keyboard(items) if items else None)
 
     async def all_tasks(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
             return
         text = self.city.all_view(now_utc())
-        for i in range(0, len(text), 4000):  # long lists go in several messages
-            await update.message.reply_text(text[i:i + 4000])
+        chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)]  # long lists go in several messages
+        cleanup = InlineKeyboardMarkup([[InlineKeyboardButton("🧹 پاک کردن کارهای اضافه", callback_data="q:0")]])
+        for i, chunk in enumerate(chunks):
+            await update.message.reply_text(chunk, reply_markup=cleanup if i == len(chunks) - 1 else None)
 
     async def city_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
@@ -204,6 +273,10 @@ class Bot:
         if body:
             await self.import_plan(update, body)
         else:
+            await self.plan_prompt(update, ctx)
+
+    async def plan_prompt(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if self.is_owner(update):
             self.awaiting_plan = True
             await update.message.reply_text(
                 "برنامه محتوا رو همینجا بفرست، یا اگه طولانیه به‌صورت فایل txt. هر محتوا یه خط:\n"
@@ -270,6 +343,15 @@ class Bot:
         if not self.is_owner(update):
             return
         message = update.message.text
+        menu = {
+            MENU_TODAY: self.tasks, MENU_BUILDINGS: self.buildings, MENU_BRIEF: self.today,
+            MENU_CITY: self.city_cmd, MENU_ALL: self.all_tasks, MENU_PROFILE: self.profile,
+            MENU_HELP: self.help, MENU_PLAN: self.plan_prompt,
+        }
+        if message in menu:
+            self.awaiting_when = self.awaiting_split = None
+            await menu[message](update, ctx)
+            return
         if self.awaiting_plan:
             self.awaiting_plan = False
             await self.import_plan(update, message)
@@ -325,6 +407,26 @@ class Bot:
             return
         action, task_id, *rest = query.data.split(":")
         task_id = int(task_id)
+        if action == "q":
+            await query.answer()
+            tasks = self.db.open_tasks()
+            more = f"\n(فقط {CLEANUP_LIMIT} تای اول نشون داده شده)" if len(tasks) > CLEANUP_LIMIT else ""
+            await query.message.reply_text(
+                "روی هر کاری که اضافه‌ست بزن تا حذف بشه. بقیه دست نمی‌خورن." + more,
+                reply_markup=cleanup_keyboard(tasks),
+            )
+            return
+        if action == "k":
+            task = self.db.get_task(task_id)
+            if task and task.status == "open":
+                self.city.drop(task_id, now_utc())
+            await query.answer("🗑 حذف شد")
+            rows = [
+                row for row in query.message.reply_markup.inline_keyboard
+                if row[0].callback_data != f"k:{task_id}"
+            ]
+            await query.edit_message_reply_markup(InlineKeyboardMarkup(rows) if rows else None)
+            return
         task = self.db.get_task(task_id)
         if task is None:
             await query.answer("این کار پیدا نشد")
@@ -352,6 +454,17 @@ class Bot:
             self.city.delegate(task_id, now)
             await query.answer()
             await query.edit_message_text(f"{query.message.text}\n\n👥 سپرده شد به پرسنل. فردا صبح پیگیرش می‌شم.")
+        elif action == "o":
+            await query.answer()
+            if task.status != "open":
+                await query.message.reply_text(f"«{task.title}» دیگه باز نیست.")
+                return
+            text = f"{label(task.building)}\n{task.title}"
+            if task.due_time:
+                text += f"\n⏰ {task.due_time}"
+            if task.notes:
+                text += f"\n\n📝 {task.notes}"
+            await query.message.reply_text(text[:4000], reply_markup=task_keyboard(task_id))
         elif action == "w":
             self.awaiting_when = None
             when = self.city.remind(task_id, rest[0], now)
@@ -413,12 +526,25 @@ def main() -> None:
     if not cfg.telegram_token:
         raise SystemExit("TELEGRAM_BOT_TOKEN is not set")
     bot = Bot(cfg)
-    app = Application.builder().token(cfg.telegram_token).build()
+    async def post_init(app: Application) -> None:
+        await app.bot.set_my_commands(COMMANDS)
+        if bot.owner_id() and bot.db.get_state("menu_version") != "1":
+            bot.db.set_state("menu_version", "1")
+            await app.bot.send_message(
+                bot.owner_id(),
+                "🏛 منوی جدید شهرداری آماده‌ست. از دکمه‌های پایین استفاده کن، "
+                "و هر کار تازه‌ای رو هم همینجا بنویس.",
+                reply_markup=MENU,
+            )
+
+    app = Application.builder().token(cfg.telegram_token).post_init(post_init).build()
     app.add_handler(CommandHandler("start", bot.start))
     app.add_handler(CommandHandler("help", bot.help))
     app.add_handler(CommandHandler("today", bot.today))
     app.add_handler(CommandHandler("tasks", bot.tasks))
     app.add_handler(CommandHandler("all", bot.all_tasks))
+    app.add_handler(CommandHandler("buildings", bot.buildings))
+    app.add_handler(CommandHandler("menu", bot.menu))
     app.add_handler(CommandHandler("city", bot.city_cmd))
     app.add_handler(CommandHandler("profile", bot.profile))
     app.add_handler(CommandHandler("plan", bot.plan))

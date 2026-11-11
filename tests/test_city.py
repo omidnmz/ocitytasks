@@ -346,3 +346,27 @@ def test_weekly_review_on_review_day(city):
     msgs = city.tick(at(13, 10, 30))  # friday
     review = [m for m in msgs if "مرور هفته" in m.text]
     assert review and "دست نخوردن" in review[0].text
+
+
+def test_today_view_is_short_and_has_a_button_per_task(city):
+    old = city.add("قدیمی", "retail", now=at(10, 9))
+    city.add("ضبط ریل", "media", now=at(11, 9), due_time="12:00")
+    city.add("فردا", "smarto", now=at(11, 9), due_date="2026-11-12")
+    city.add("پرسنل", "retail", now=at(11, 9), delegated=True)
+    text, items = city.today_view(at(11, 10))
+    assert [t.title for t in items] == ["قدیمی", "ضبط ریل"]
+    assert "فردا" not in text and "1 کار هم دست پرسنله" in text
+    assert items[0].id == old.id
+
+
+def test_buildings_view_lists_next_steps_in_priority_order(city):
+    city.add("دامین", "smarto", "construction", now=at(11, 9))
+    city.add("ریل هفته بعد", "media", now=at(11, 9), due_date="2026-11-14")
+    lines = city.buildings_view(at(11, 10)).splitlines()
+    assert lines[2].startswith("1. 🎬") and lines[3].startswith("2. 🤖")
+
+
+def test_empty_today_suggests_next_step(city):
+    city.add("دامین", "smarto", "construction", now=at(11, 9))
+    text, items = city.today_view(at(11, 10))
+    assert not items and "دامین" in text

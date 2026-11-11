@@ -84,13 +84,19 @@ set the weekly content cycle (see `.env.example`). Data lives in `data/ocity.db`
 
 | | |
 |---|---|
-| `/today` | morning brief now |
-| `/tasks` | today's digest: overdue, today, staff, waiting, and one next step per building |
+| `/tasks` | today's work only, short, one button per task (done, snooze, staff, delete) |
+| `/buildings` | one next step per building, in priority order |
+| `/today` | the full morning brief now |
 | `/all` | every open task by board |
 | `/city` | buildings, floors, scaffolding |
 | `/profile` | learned work patterns and your rules |
 | `/plan` | import a content plan |
 | `/sprint` | restart the 3-day content sprint |
+| `/menu` | show the button menu |
+
+A button menu stays under the chat (کارهای امروز، ساختمون‌ها، گزارش کامل، همه کارها، برنامه محتوا،
+شهر، روال من، راهنما), so none of these has to be typed. `/all` ends with 🧹 a cleanup list:
+tap a task there to delete it.
 
 ## Development
 

@@ -764,6 +764,80 @@ class CityHall:
         lines += ["", "همه کارها: /all · سناریو: /script شماره"]
         return "\n".join(lines)[:4000]
 
+    def today_tasks(self, now: datetime) -> list[Task]:
+        """Today's own work, overdue first, one step per mission, no staff tasks."""
+        today = self.local(now).date().isoformat()
+        seen_missions: set[int] = set()
+        items = []
+        for t in sorted(self.db.open_tasks(), key=lambda t: (t.mission_id or 0, t.step_order or 0)):
+            if t.board != "today" or (t.due_date or today) > today or t.delegated:
+                continue
+            if t.mission_id is not None:
+                if t.mission_id in seen_missions:
+                    continue
+                seen_missions.add(t.mission_id)
+            items.append(t)
+        order = {k: i for i, k in enumerate(self.cfg.building_priority)}
+        items.sort(key=lambda t: (
+            (t.due_date or today) >= today, t.priority != "high", t.due_time or "99",
+            order.get(t.building, 99), t.id,
+        ))
+        return items
+
+    def today_view(self, now: datetime, limit: int = 8) -> tuple[str, list[Task]]:
+        """A short list of today's work; each task gets its own button."""
+        today = self.local(now).date().isoformat()
+        items = self.today_tasks(now)
+        shown = items[:limit]
+        if not items:
+            lines = ["📌 کارهای امروز", "", "امروز کاری نمونده 🎉"]
+            top = self.next_steps(now)[:1]
+            if top:
+                lines += ["", "اگه وقت داری، قدم بعدی:", top[0]]
+            return "\n".join(lines), []
+        lines = [f"📌 کارهای امروز ({len(items)})", ""]
+        for t in shown:
+            mark = "⏰ " if t.due_date and t.due_date < today else ""
+            at = f" {t.due_time}" if t.due_time else ""
+            lines.append(f"{mark}{BUILDINGS[t.building].emoji} {t.title}{at}")
+        if len(items) > limit:
+            lines.append(f"... و {len(items) - limit} کار دیگه (📋 همه کارها)")
+        staff = sum(
+            1 for t in self.db.open_tasks()
+            if t.delegated and t.board == "today" and (t.due_date or today) <= today
+        )
+        if staff:
+            lines.append(f"\n👥 {staff} کار هم دست پرسنله.")
+        lines += ["", "روی هر کار بزن تا انجامش بدی یا عقبش بندازی.", self.streak_line(now)]
+        return "\n".join(lines), shown
+
+    def next_steps(self, now: datetime) -> list[str]:
+        """One next step per building, in the Mayor's priority order."""
+        today = self.local(now).date().isoformat()
+        open_ = [t for t in self.db.open_tasks() if t.board != "waiting"]
+        lines = []
+        order = [k for k in self.cfg.building_priority if k in BUILDINGS]
+        order += [k for k in BUILDINGS if k not in order and k != "vault"]
+        for key in order:
+            queue = sorted(
+                (t for t in open_ if t.building == key and not (t.board == "today" and (t.due_date or today) <= today)),
+                key=lambda t: (t.mission_id is None, t.step_order or 0, t.due_date or "9999", t.id),
+            )
+            if queue:
+                t, b = queue[0], BUILDINGS[key]
+                when = f" ({t.due_date})" if t.due_date else ""
+                lines.append(f"{len(lines) + 1}. {b.emoji} {b.name}: {t.title}{when}")
+        return lines
+
+    def buildings_view(self, now: datetime) -> str:
+        steps = self.next_steps(now)
+        if not steps:
+            return "🏗 همه ساختمون‌ها فعلاً قدم بعدی ندارن. یه کار جدید بنویس."
+        text = "🏗 ساختمون‌های منتظر قدم بعدی (به ترتیب اولویت)\n\n" + "\n".join(steps)
+        if any(t.kind == "publish" for t in self.db.open_tasks()):
+            text += "\n\n" + self.buffer_line(now)
+        return text
+
     def all_view(self, now: datetime) -> str:
         today = self.local(now).date().isoformat()
         boards = {"today": "📌 روزانه", "waiting": "⏳ در انتظار", "construction": "🏗 در حال ساخت"}
