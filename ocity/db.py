@@ -97,6 +97,7 @@ class Task:
     link_id: int | None
     created_at: str
     done_at: str | None
+    brand: str | None = None  # the business a content or marketing task is for (a building key)
 
 
 class DB:
@@ -107,7 +108,7 @@ class DB:
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
         columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(tasks)")}
-        for column, kind in (("notes", "TEXT"), ("link_id", "INTEGER")):
+        for column, kind in (("notes", "TEXT"), ("link_id", "INTEGER"), ("brand", "TEXT")):
             if column not in columns:  # databases created by an older version
                 self.conn.execute(f"ALTER TABLE tasks ADD COLUMN {column} {kind}")
         self.conn.commit()
@@ -143,17 +144,18 @@ class DB:
         step_order: int | None = None,
         notes: str | None = None,
         link_id: int | None = None,
+        brand: str | None = None,
         now: datetime | None = None,
     ) -> Task:
         now = now or utcnow()
         cur = self.conn.execute(
             "INSERT INTO tasks(title, building, board, priority, kind, due_date, due_time, "
-            "next_nudge_at, estimate_min, delegated, mission_id, step_order, notes, link_id, created_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "next_nudge_at, estimate_min, delegated, mission_id, step_order, notes, link_id, brand, created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 title, building, board, priority, kind, due_date, due_time,
                 iso(next_nudge_at), estimate_min, int(delegated), mission_id,
-                step_order, notes, link_id, iso(now),
+                step_order, notes, link_id, brand, iso(now),
             ),
         )
         self.conn.commit()

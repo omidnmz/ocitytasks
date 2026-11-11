@@ -88,3 +88,19 @@ def test_api_renames_and_adds_buildings():
         assert by["retail"]["name"] == "کراکس شاپ" and by["retail"]["emoji"] == "👟" and by["retail"]["priority"]
         assert by[key]["name"] == "باغ" and by[key]["custom"] and not by["retail"]["custom"]
     run(check)
+
+
+def test_api_takes_a_marketing_plan_and_its_times():
+    async def check(client, city):
+        h = {"X-Init-Data": signed(OWNER)}
+        r = await client.post("/api/plan", json={"text": "hello"}, headers=h)
+        assert r.status == 400
+        text = "#برند: کراکس\n[ریلز]\n2030-01-10 | سایز | ریل | شات |\n"
+        data = await (await client.post("/api/plan", json={"text": text}, headers=h)).json()
+        assert data["ok"] and "filming" in data["ask_times"]
+        r = await client.post("/api/time", json={"kind": "filming", "at": "10:00"}, headers=h)
+        assert r.status == 200
+        state = await (await client.get("/api/state", headers=h)).json()
+        assert state["media"]["cards"][0]["stage"] == "filming" and state["media"]["times"]["filming"] == "10:00"
+        assert "lights" in state and len((await (await client.get("/api/prompts", headers=h)).json())["prompts"]) == 3
+    run(check)

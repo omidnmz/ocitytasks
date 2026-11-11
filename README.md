@@ -34,11 +34,15 @@ follows up on tasks at the right moment, and learns how you work.
   `docs/media-hub-claude-project.md` sets up a Claude project that writes this handoff each week.
 - **/script 12**: show the script of task 12. **/del 12 15**: remove tasks 12 and 15.
   Sending the same plan again updates its tasks instead of duplicating them.
-- **Weekly content cycle** (batch production): on `PLAN_DAY` (Thursday) it asks for next week's handoff
-  from the Media Hub Claude project and keeps asking for two days until a plan arrives. Filming is grouped on
-  `PRODUCTION_DAYS` (Saturday and Tuesday): each piece is filmed on the last production day before it goes out,
-  staff prep is due the day before filming, and the morning brief on a production day opens with the batch
-  and its scripts. The rest of the week it only reminds about publishing.
+- **Marketing to Media Hub line**: on `MARKETING_DAY` (Friday) the Marketing tower asks for next week's plan
+  of each brand page (Crocs, SmartO, Fitness OS). 📣 برنامه مارکتینگ (or the tower in the Mini App) gives
+  the text to paste into that brand's marketing chat; its answer, in the fixed `#برند:` template, is pasted back
+  and split by itself: daily stories (one a day, no editing, called at `STORY_TIME`), reels that go down the
+  Media Hub line (prep, filming on `FILM_DAYS`, editing on `EDIT_DAYS`, publishing) and other tasks to the
+  brand's building. The bot asks once what time you film, edit and publish, and remembers it.
+- **City Hall calls**: the evening before a filming or editing day (`EVE_TIME`) it says what is coming; on the day
+  a 🎬 button opens a one-at-a-time focus mode with the scripts, and after each station it says the next step.
+  City Hall itself grows a floor for every day you show up, and each building lights up on a day it gets work done.
 - **Content buffer**: pieces filmed and waiting to go out. 3 or more is healthy, 2 means catch up, 0 or 1 is an emergency.
 - **Daily digest**: the morning brief and `/tasks` list the buildings waiting for their next step,
   in `BUILDING_PRIORITY` order (Media Hub, Retail, SmartO, Marketing by default).
@@ -77,7 +81,7 @@ copy .env.example .env
 ```
 
 All times are in `TIMEZONE` (default Asia/Tehran). Set `QUIET_WINDOWS=18:30-20:00`
-to keep it silent during busy shop hours. `PLAN_DAY`, `PRODUCTION_DAYS` and `BUILDING_PRIORITY`
+to keep it silent during busy shop hours. `MARKETING_DAY`, `FILM_DAYS`, `EDIT_DAYS`, `STORY_TIME`, `EVE_TIME` and `BUILDING_PRIORITY`
 set the weekly content cycle (see `.env.example`). Data lives in `data/ocity.db` (SQLite).
 
 ## Commands

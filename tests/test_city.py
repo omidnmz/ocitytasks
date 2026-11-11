@@ -75,16 +75,13 @@ def test_learning_moves_nudge_to_usual_time(city):
     assert "12:40" in learning.describe(profile)
 
 
-def test_seed_starts_content_sprint_and_followups(city):
+def test_seed_gives_each_brand_page_a_marketing_plan_task(city):
     city.seed(at(2, 9))
     city.seed(at(2, 9))  # idempotent
-    missions = city.db.active_missions(at(2, 9))
-    assert len(missions) == 1
-    msgs = city.tick(at(2, 12, 30))
-    sprint = [m for m in msgs if "اسپرینت" in m.text]
-    assert len(sprint) == 1 and "/plan" in sprint[0].text
-    # a restart late in the day does not replay the missed slots
-    assert not [m for m in city.tick(at(2, 12, 31)) if "اسپرینت" in m.text]
+    plans = [t for t in city.db.open_tasks() if t.kind == "mkt_plan"]
+    assert sorted(t.brand for t in plans) == ["fitness", "retail", "smarto"]
+    assert all(t.building == "marketing" for t in plans)
+    assert not city.db.active_missions(at(2, 9))
 
 
 def test_mission_closes_when_all_steps_done(city):
@@ -178,10 +175,11 @@ def test_handoff_scripts_become_filming_tasks_and_arrive_on_the_day(city):
     assert "شات ۲" in filming[0].notes and "کپشن" in filming[0].notes
     smarto = [t for t in result.added if "معرفی پنل" in t.title]
     assert len(smarto) == 1 and smarto[0].notes is None
-    # nothing before the production day, the script arrives with the morning brief on the 3rd
-    assert not [m for m in city.tick(at(2, 23, 59)) if m.text.startswith("📝")]
-    scripts = [m for m in city.tick(at(3, 10, 30)) if m.text.startswith("📝")]
-    assert len(scripts) == 1 and scripts[0].task_id == filming[0].id
+    # nothing before the day; on the 3rd City Hall offers the start button, scripts come one by one
+    assert not [m for m in city.tick(at(2, 23, 59)) if m.start_kind == "filming"]
+    calls = [m for m in city.tick(at(3, 10, 30)) if m.start_kind == "filming"]
+    assert len(calls) == 1
+    assert city.stage_queue("filming", at(3, 10, 31))[0].id == filming[0].id
 
 
 def test_old_database_gets_notes_column(tmp_path):
@@ -221,13 +219,10 @@ def test_digest_shows_today_and_one_next_step_per_building(city):
     city.seed(at(2, 9))
     city.import_content_plan(HANDOFF, at(2, 9))
     digest = city.tasks_view(at(2, 10))
-    sprint_steps = [t for t in city.db.open_tasks() if t.mission_id]
-    assert sprint_steps[0].title in digest
-    assert sprint_steps[1].title not in digest  # only the next sprint step
     media_line = [l for l in digest.splitlines() if "🎬 Media Hub:" in l]
-    assert len(media_line) == 1 and "کار در صف" in media_line[0]
+    assert len(media_line) == 1
     full = city.all_view(at(2, 10))
-    assert sprint_steps[1].title in full and "معرفی پنل" in full
+    assert "معرفی پنل" in full
 
 
 def test_media_hub_comes_first_in_the_priority_list(city):
@@ -237,21 +232,22 @@ def test_media_hub_comes_first_in_the_priority_list(city):
     assert "1. 🎬 Media Hub" in digest and "2. 🤖 SmartO" in digest
 
 
-def test_plan_day_asks_for_handoff_until_it_arrives(city):
-    # 2026-11-05 is a Thursday, the default plan day
-    msgs = city.tick(at(5, 10, 30))
-    assert any("روز برنامه هفته بعد" in m.text for m in msgs)
+def test_marketing_day_asks_for_each_brand_plan_until_it_arrives(city):
+    # 2026-11-06 is a Friday, the marketing day
     msgs = city.tick(at(6, 10, 30))
-    assert any("هنوز هندآف" in m.text for m in msgs)
-    city.import_content_plan(HANDOFF.replace("2026-11-05", "2026-11-12").replace("2026-11-06", "2026-11-13"), at(6, 11))
-    assert not any("هندآف" in m.text for m in city.tick(at(7, 10, 30)))
+    assert any("روز برنامه‌ریزی مارکتینگه" in m.text for m in msgs)
+    prompts = [m for m in msgs if m.text.startswith("برنامه مارکتینگ هفته آینده")]
+    assert len(prompts) == 3 and "#برند:" in prompts[0].text
+    assert any("هنوز برنامه مارکتینگ" in m.text for m in city.tick(at(7, 10, 30)))
+    for brand in ("کراکس", "SmartO", "Fitness OS"):
+        city.import_marketing_plan(f"#برند: {brand}\n[استوری]\n2026-11-08 | سلام | ", at(7, 11))
+    assert not any("مارکتینگ" in m.text for m in city.tick(at(8, 10, 30)))
 
 
 def test_production_day_opens_with_the_batch_and_buffer_counts_filmed_pieces(city):
     city.import_content_plan(HANDOFF, at(2, 9))
     msgs = city.tick(at(3, 10, 30))  # Tuesday, a production day
-    batch = [m for m in msgs if "روز تولید" in m.text]
-    assert len(batch) == 1 and "1 محتوا برای ضبط" in batch[0].text and "اورژانسی" in batch[0].text
+    assert len([m for m in msgs if m.start_kind == "filming"]) == 1
     filming = [t for t in city.db.open_tasks() if t.kind == "filming"][0]
     city.done(filming.id, at(3, 12))
     assert city.content_buffer(at(3, 13)) == 1
@@ -394,7 +390,8 @@ def test_running_businesses_start_tall_and_tasks_move_to_their_product():
     db = DB(":memory:")
     city = CityHall(db, Config())
     floors = city.floors()
-    assert floors["retail"] == 10 and floors["technician"] == 4 and floors["tradebot"] == 3 and floors["smarto"] == 0
+    assert floors["retail"] == 10 and floors["technician"] == 4 and floors["tradebot"] == 3 and floors["smarto"] == 7
+    assert floors["fitness"] == 5 and floors["media"] == 0
     # an old Retail OS task living in the Crocs building moves to Retail OS once
     db.set_state("districts_v1", "")
     tid = db.add_task("ساخت ربات موجودی تلگرام برای شعبه‌ها", "retail", board="construction").id
@@ -409,3 +406,97 @@ def test_running_businesses_start_tall_and_tasks_move_to_their_product():
     assert city.city_state(datetime(2026, 11, 11, 10, tzinfo=ZoneInfo("UTC")))["buildings"][0]  # still builds
     from ocity.buildings import BUILDINGS
     assert BUILDINGS["tradebot"].district == "tech" and BUILDINGS["tradebot"].base == 3
+
+
+PLAN = """#برند: کراکس
+#هدف: فروش بیشتر کلاسیک
+#معیار نتیجه: تعداد دایرکت
+
+[استوری]
+2026-11-14 | نظرسنجی رنگ | مشکی یا سفید
+2026-11-15 | پشت صحنه انبار |
+
+[ریلز]
+2026-11-17 | راهنمای سایز | ریل | شات ۱ دیوار رنگ | کلاسیک مشکی
+2026-11-19 | سه رنگ پرفروش | ریل | شات ۱ |
+
+[کارها]
+عنوان کار | بخش
+آپدیت عکس‌های سایت | سایت
+چیدن قفسه رنگ‌ها | پرسنل
+
+#برند: Fitness OS
+[استوری]
+2026-11-14 | حرکت روز |
+[کارها]
+پیام به ۵ مربی | محصول
+"""
+
+
+def test_marketing_plan_splits_into_stories_reels_and_tasks():
+    city = CityHall(DB(":memory:"), Config())
+    city.seed(at(12, 9))
+    r = city.import_marketing_plan(PLAN, at(12, 22))
+    kinds = [t.kind for t in r.added]
+    assert kinds.count("story") == 3 and kinds.count("filming") == 2 and kinds.count("content_prep") == 1
+    # the marketing tower's orders for these two brands are done and gave it floors
+    assert {t.brand for t in city.db.open_tasks() if t.kind == "mkt_plan"} == {"smarto"}
+    assert city.floors()["marketing"] == 2
+    # reels are filmed on Sunday the 15th (a day left for editing), the card waits on the line
+    film = [t for t in r.added if t.kind == "filming"]
+    assert {t.due_date for t in film} == {"2026-11-15"}
+    card = city.db.get_task(film[0].link_id)
+    assert card.board == "pipeline" and card.kind == "publish" and card.brand == "retail"
+    assert card.id not in [t.id for t in city.today_tasks(at(17, 10))]
+    # other work goes to the brand's building; staff work is marked for staff
+    shelf = [t for t in r.added if "قفسه" in t.title][0]
+    coach = [t for t in r.added if "مربی" in t.title][0]
+    assert shelf.building == "retail" and shelf.delegated and coach.building == "fitness"
+    # City Hall has to learn when filming, editing and publishing happen
+    assert r.ask_times == ["filming", "editing", "publish"]
+    city.set_kind_time("filming", "10:00")
+    assert all(city.db.get_task(t.id).due_time == "10:00" for t in film)
+
+
+def test_content_line_moves_from_filming_to_editing_to_publish():
+    city = CityHall(DB(":memory:"), Config())
+    city.set_kind_time("editing", "17:00")
+    r = city.import_marketing_plan(PLAN, at(12, 22))
+    film = sorted((t for t in r.added if t.kind == "filming"), key=lambda t: t.id)[0]
+    done = city.done(film.id, at(15, 11))
+    assert "تدوین" in done.next_step and "17:00" in done.next_step
+    edit = [t for t in city.db.open_tasks() if t.kind == "editing"][0]
+    assert edit.due_date == "2026-11-16" and edit.link_id == film.link_id  # Monday
+    assert city.content_buffer(at(15, 12)) == 1 and city.buffers(at(15, 12)) == {"retail": 1}
+    done = city.done(edit.id, at(16, 18))
+    assert "انتشار" in done.next_step
+    card = city.db.get_task(film.link_id)
+    assert card.board == "today" and card.due_date == "2026-11-17"
+    cards, stories = city.media_board(at(16, 18))
+    assert [c["stage"] for c in cards] == ["publish", "filming"] and stories == []  # the stories were last week
+
+
+def test_city_hall_calls_stories_filming_and_the_evening_before():
+    city = CityHall(DB(":memory:"), Config())
+    city.import_marketing_plan(PLAN, at(12, 22))
+    msgs = city.city_hall_calls(at(14, 11, 0))
+    stories = [m for m in msgs if "استوری‌های امروز" in m.text]
+    assert len(stories) == 1 and len(stories[0].done_buttons) == 2
+    assert city.city_hall_calls(at(14, 11, 1)) == []
+    city.done(stories[0].done_buttons[0].id, at(14, 11, 30))
+    again = [m for m in city.city_hall_calls(at(14, 13, 0)) if "استوری" in m.text]
+    assert len(again) == 1 and len(again[0].done_buttons) == 1
+    assert "retail" in city.lit_buildings(at(14, 12)) and "media" in city.lit_buildings(at(14, 12))
+    eve = [m for m in city.city_hall_calls(at(14, 21, 0)) if "فردا Media Hub" in m.text]
+    assert len(eve) == 1 and "فیلم‌برداری" in eve[0].text and "2 محتوا" in eve[0].text
+    start = [m for m in city.city_hall_calls(at(15, 10, 31)) if m.start_kind == "filming"]
+    assert len(start) == 1
+    # a missed story does not pile onto tomorrow
+    city.carry_over(at(14, 23))
+    assert not [t for t in city.db.open_tasks() if t.kind == "story" and t.due_date == "2026-11-15" and "حرکت" in t.title]
+
+
+def test_city_hall_grows_with_each_day_the_mayor_shows_up():
+    city = CityHall(DB(":memory:"), Config())
+    city.seen(at(12, 9)); city.seen(at(12, 15)); city.seen(at(13, 9))
+    assert city.floors()["cityhall"] == 2 and "cityhall" in city.lit_buildings(at(13, 10))

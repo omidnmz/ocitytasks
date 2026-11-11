@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ from urllib.parse import parse_qsl
 
 from aiohttp import web
 
+from . import pipeline
 from .buildings import BUILDINGS
 from .city import CityHall
 
@@ -82,9 +84,11 @@ def make_app(city: CityHall, token: str, owner_id) -> web.Application:
         now = now_utc()
         message = ""
         if action == "done":
-            if task.status != "done":
-                city.done(task_id, now)
             message = f"یه طبقه به {BUILDINGS[task.building].name} اضافه شد 🏗"
+            if task.status != "done":
+                step = city.done(task_id, now).next_step
+                if step:
+                    message += f"\n🏛 {step}"
         elif action == "snooze" and body.get("option") in SNOOZE_OPTIONS:
             when = city.snooze(task_id, body["option"], now)
             message = f"⏰ دوباره می‌پرسم: {city.local(when):%H:%M}"
@@ -143,12 +147,34 @@ def make_app(city: CityHall, token: str, owner_id) -> web.Application:
                              district=body.get("district"))
         return web.json_response({"ok": True, "message": "✏️ ذخیره شد"})
 
+    async def add_plan(request: web.Request) -> web.Response:
+        body = await request.json()
+        text = str(body.get("text", ""))[:30000]
+        if not pipeline.is_marketing_plan(text):
+            return web.json_response({"error": "format", "message": "باید با «#برند: ...» شروع بشه."}, status=400)
+        result = city.import_marketing_plan(text, now_utc())
+        return web.json_response({"ok": True, "message": result.reply, "ask_times": result.ask_times})
+
+    async def set_time(request: web.Request) -> web.Response:
+        body = await request.json()
+        kind, at = str(body.get("kind", "")), str(body.get("at", ""))
+        if kind not in ("story", "filming", "editing", "publish") or not re.fullmatch(r"\d{2}:\d{2}", at):
+            return web.json_response({"error": "bad time"}, status=400)
+        city.set_kind_time(kind, at)
+        return web.json_response({"ok": True, "message": f"⏰ ساعت {at} ثبت شد"})
+
+    async def prompts(request: web.Request) -> web.Response:
+        return web.json_response({"prompts": city.marketing_prompts(now_utc())})
+
     app = web.Application(middlewares=[auth])
     app.router.add_get("/", index)
     app.router.add_get("/api/state", state)
     app.router.add_post("/api/task", add_task)
     app.router.add_post("/api/task/{id:\\d+}/{action}", task_action)
     app.router.add_post("/api/building", add_building)
+    app.router.add_post("/api/plan", add_plan)
+    app.router.add_post("/api/time", set_time)
+    app.router.add_get("/api/prompts", prompts)
     app.router.add_post("/api/building/{key}", edit_building)
     return app
 

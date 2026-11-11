@@ -58,6 +58,12 @@ class Config:
     plan_day: int = 3  # thursday
     production_days: list[int] = field(default_factory=lambda: [5, 1])  # saturday, tuesday
     review_day: int = 4  # friday: weekly review with the morning brief
+    # The marketing -> Media Hub line: plans on the marketing day, filming and editing in batches
+    marketing_day: int = 4  # friday
+    film_days: list[int] = field(default_factory=lambda: [6])  # sunday
+    edit_days: list[int] = field(default_factory=lambda: [0, 1])  # monday, tuesday
+    story_time: time = time(11, 0)  # daily stories, while the Mayor is in the shop (11-14)
+    eve_time: time = time(21, 0)  # City Hall's heads-up for tomorrow's big jobs
     # Buildings in the order the Mayor wants to grow them
     building_priority: list[str] = field(default_factory=lambda: ["media", "retail", "smarto", "marketing"])
     db_path: str = "data/ocity.db"
@@ -102,6 +108,11 @@ def load() -> Config:
         plan_day=_parse_weekdays(env("PLAN_DAY", "thursday"))[0],
         production_days=_parse_weekdays(env("PRODUCTION_DAYS", "saturday,tuesday")),
         review_day=_parse_weekdays(env("REVIEW_DAY", "friday"))[0],
+        marketing_day=_parse_weekdays(env("MARKETING_DAY", "friday"))[0],
+        film_days=_parse_weekdays(env("FILM_DAYS", "sunday")),
+        edit_days=_parse_weekdays(env("EDIT_DAYS", "monday,tuesday")),
+        story_time=_parse_time(env("STORY_TIME", "11:00")),
+        eve_time=_parse_time(env("EVE_TIME", "21:00")),
         building_priority=_parse_list(env("BUILDING_PRIORITY", "media,retail,smarto,marketing")),
         db_path=env("DB_PATH", "data/ocity.db"),
         webapp_url=env("WEBAPP_URL", "").strip().rstrip("/"),
