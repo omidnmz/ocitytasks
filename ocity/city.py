@@ -838,6 +838,45 @@ class CityHall:
             text += "\n\n" + self.buffer_line(now)
         return text
 
+    def city_state(self, now: datetime) -> dict:
+        """Everything the Mini App draws: the buildings, today's work, the streak."""
+        today = self.local(now).date().isoformat()
+        floors = self.db.floors_by_building()
+        open_ = self.db.open_tasks()
+
+        def task_json(t: Task) -> dict:
+            return {
+                "id": t.id, "title": t.title, "building": t.building, "board": t.board,
+                "due_date": t.due_date, "due_time": t.due_time,
+                "overdue": bool(t.due_date and t.due_date < today and t.board == "today"),
+                "staff": bool(t.delegated), "script": bool(t.notes), "high": t.priority == "high",
+            }
+
+        order = [k for k in self.cfg.building_priority if k in BUILDINGS]
+        order += [k for k in BUILDINGS if k not in order]
+        buildings = []
+        for key in order:
+            b = BUILDINGS[key]
+            mine = [t for t in open_ if t.building == key]
+            mine.sort(key=lambda t: (t.board == "waiting", t.mission_id is None, t.step_order or 0,
+                                     t.due_date or "9999", t.id))
+            buildings.append({
+                "key": key, "name": b.name, "emoji": b.emoji, "floors": floors.get(key, 0),
+                "open": len(mine), "overdue": sum(1 for t in mine if task_json(t)["overdue"]),
+                "priority": key in self.cfg.building_priority,
+                "tasks": [task_json(t) for t in mine[:12]],
+            })
+        has_content = any(t.kind == "publish" for t in open_)
+        return {
+            "today": [task_json(t) for t in self.today_tasks(now)],
+            "buildings": buildings,
+            "streak": self.streak(now),
+            "streak_line": self.streak_line(now),
+            "buffer": self.content_buffer(now) if has_content else None,
+            "buffer_line": self.buffer_line(now) if has_content else None,
+            "date": today,
+        }
+
     def all_view(self, now: datetime) -> str:
         today = self.local(now).date().isoformat()
         boards = {"today": "📌 روزانه", "waiting": "⏳ در انتظار", "construction": "🏗 در حال ساخت"}

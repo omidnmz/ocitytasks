@@ -6,7 +6,16 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, Update
+from telegram import (
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    MenuButtonWebApp,
+    ReplyKeyboardMarkup,
+    Update,
+    WebAppInfo,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -65,17 +74,23 @@ MENU_ALL = "📋 همه کارها"
 MENU_PLAN = "🎬 برنامه محتوا"
 MENU_PROFILE = "🧠 روال من"
 MENU_HELP = "❓ راهنما"
-MENU = ReplyKeyboardMarkup(
-    [
+MENU_APP = "🏙 باز کردن شهر"
+
+
+def make_menu(webapp_url: str = "") -> ReplyKeyboardMarkup:
+    rows = [
         [KeyboardButton(MENU_TODAY), KeyboardButton(MENU_BUILDINGS)],
         [KeyboardButton(MENU_BRIEF), KeyboardButton(MENU_ALL)],
         [KeyboardButton(MENU_PLAN), KeyboardButton(MENU_CITY)],
         [KeyboardButton(MENU_PROFILE), KeyboardButton(MENU_HELP)],
-    ],
-    resize_keyboard=True,
-    is_persistent=True,
-    input_field_placeholder="کار جدید رو بنویس...",
-)
+    ]
+    if webapp_url:
+        rows.insert(0, [KeyboardButton(MENU_APP, web_app=WebAppInfo(url=webapp_url))])
+    return ReplyKeyboardMarkup(
+        rows, resize_keyboard=True, is_persistent=True, input_field_placeholder="کار جدید رو بنویس...",
+    )
+
+
 COMMANDS = [
     BotCommand("tasks", "کارهای امروز"),
     BotCommand("buildings", "قدم بعدی ساختمون‌ها"),
@@ -187,6 +202,7 @@ class Bot:
         self.cfg = cfg
         self.db = DB(cfg.db_path)
         self.city = CityHall(self.db, cfg, make_ai(cfg.anthropic_api_key, cfg.claude_model))
+        self.menu_markup = make_menu(cfg.webapp_url)
         self.awaiting_plan = False
         self.awaiting_when: int | None = None  # task waiting for a typed reminder time
         self.awaiting_split: int | None = None  # stuck task waiting for its first small step
@@ -219,16 +235,16 @@ class Bot:
             "چند کار شروع رو از وضعیت فعلیت ثبت کردم و اسپرینت سه‌روزه محتوا رو شروع کردم "
             "تا برنامه و تولید محتوای چند روزت رو یکجا جلو ببریم.\n\n"
             "قدم اول: برنامه محتوای ماهانه و جدول محتوای آماده‌ت رو با /plan برام بفرست.\n\n" + HELP,
-            reply_markup=MENU,
+            reply_markup=self.menu_markup,
         )
 
     async def help(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
-            await update.message.reply_text(HELP, reply_markup=MENU)
+            await update.message.reply_text(HELP, reply_markup=self.menu_markup)
 
     async def menu(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
-            await update.message.reply_text("منو پایین صفحه‌ست 👇", reply_markup=MENU)
+            await update.message.reply_text("منو پایین صفحه‌ست 👇", reply_markup=self.menu_markup)
 
     async def buildings(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if self.is_owner(update):
@@ -526,18 +542,34 @@ def main() -> None:
     if not cfg.telegram_token:
         raise SystemExit("TELEGRAM_BOT_TOKEN is not set")
     bot = Bot(cfg)
-    async def post_init(app: Application) -> None:
-        await app.bot.set_my_commands(COMMANDS)
-        if bot.owner_id() and bot.db.get_state("menu_version") != "1":
-            bot.db.set_state("menu_version", "1")
-            await app.bot.send_message(
-                bot.owner_id(),
-                "🏛 منوی جدید شهرداری آماده‌ست. از دکمه‌های پایین استفاده کن، "
-                "و هر کار تازه‌ای رو هم همینجا بنویس.",
-                reply_markup=MENU,
-            )
+    runner = None
 
-    app = Application.builder().token(cfg.telegram_token).post_init(post_init).build()
+    async def post_init(app: Application) -> None:
+        nonlocal runner
+        await app.bot.set_my_commands(COMMANDS)
+        if cfg.webapp_url:
+            from . import web  # aiohttp is only needed when the Mini App is on
+
+            runner = await web.start(bot.city, cfg.telegram_token, bot.owner_id, cfg.web_host, cfg.web_port)
+            await app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="🏙 شهر", web_app=WebAppInfo(url=cfg.webapp_url))
+            )
+        version = "2" if cfg.webapp_url else "1"
+        if bot.owner_id() and bot.db.get_state("menu_version") != version:
+            bot.db.set_state("menu_version", version)
+            text = "🏛 منوی جدید شهرداری آماده‌ست. از دکمه‌های پایین استفاده کن، و هر کار تازه‌ای رو هم همینجا بنویس."
+            if cfg.webapp_url:
+                text = "🏙 شهر گرافیکی آماده‌ست! دکمه «باز کردن شهر» رو بزن."
+            await app.bot.send_message(bot.owner_id(), text, reply_markup=bot.menu_markup)
+
+    async def post_shutdown(app: Application) -> None:
+        if runner:
+            await runner.cleanup()
+
+    app = (
+        Application.builder().token(cfg.telegram_token)
+        .post_init(post_init).post_shutdown(post_shutdown).build()
+    )
     app.add_handler(CommandHandler("start", bot.start))
     app.add_handler(CommandHandler("help", bot.help))
     app.add_handler(CommandHandler("today", bot.today))
