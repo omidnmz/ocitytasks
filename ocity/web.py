@@ -121,11 +121,34 @@ def make_app(city: CityHall, token: str, owner_id) -> web.Application:
             message = f"ثبت شد ✅\n⏰ {city.remind(task.id, body['when'], now)}"
         return web.json_response({"ok": True, "message": message, "id": task.id})
 
+    async def add_building(request: web.Request) -> web.Response:
+        body = await request.json()
+        name = str(body.get("name", "")).strip()
+        if not name:
+            return web.json_response({"error": "empty"}, status=400)
+        key = city.add_building(name, str(body.get("emoji") or "🏢"))
+        if body.get("priority"):
+            city.update_building(key, priority=True)
+        b = BUILDINGS[key]
+        return web.json_response({"ok": True, "key": key, "message": f"{b.emoji} {b.name} به شهر اضافه شد"})
+
+    async def edit_building(request: web.Request) -> web.Response:
+        key = request.match_info["key"]
+        if key not in BUILDINGS:
+            return web.json_response({"error": "not found"}, status=404)
+        body = await request.json()
+        priority = body.get("priority")
+        city.update_building(key, name=str(body.get("name") or ""), emoji=str(body.get("emoji") or ""),
+                             priority=bool(priority) if priority is not None else None)
+        return web.json_response({"ok": True, "message": "✏️ ذخیره شد"})
+
     app = web.Application(middlewares=[auth])
     app.router.add_get("/", index)
     app.router.add_get("/api/state", state)
     app.router.add_post("/api/task", add_task)
     app.router.add_post("/api/task/{id:\\d+}/{action}", task_action)
+    app.router.add_post("/api/building", add_building)
+    app.router.add_post("/api/building/{key}", edit_building)
     return app
 
 

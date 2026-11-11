@@ -36,7 +36,7 @@
   @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
   /* hero city */
-  .hero { position: relative; border-radius: 26px; overflow: hidden; box-shadow: var(--shadow);
+  .hero { position: relative; border-radius: 24px; overflow: hidden; box-shadow: var(--shadow); margin: 0 -10px;
     background: linear-gradient(180deg, #5b8def 0%, #a78bfa 55%, #fbcfe8 100%); }
   .hero.night { background: linear-gradient(180deg, #070b1d 0%, #1e1b4b 58%, #5b21b6 100%); }
   .hero svg { display: block; width: 100%; height: auto; }
@@ -100,9 +100,52 @@
   nav { position: fixed; bottom: calc(12px + env(safe-area-inset-bottom)); left: 16px; right: 16px; display: flex; gap: 6px;
     background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--line); border-radius: 24px; padding: 6px; box-shadow: 0 12px 30px rgba(15, 23, 42, .18); z-index: 4; }
-  nav button { flex: 1; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 500;
-    padding: 8px 0; border-radius: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
-  nav button b { font-size: 18px; font-weight: normal; }
+  nav button { flex: 1; border: 0; background: none; color: var(--muted); font-size: 11px; font-weight: 500;
+    padding: 6px 0 5px; border-radius: 18px; cursor: pointer; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1px; position: relative; }
+  nav button b { font-size: 19px; font-weight: normal; line-height: 1.2; }
+  nav button .badge { position: absolute; top: 1px; left: calc(50% + 6px); min-width: 17px; height: 17px;
+    border-radius: 9px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; line-height: 17px;
+    padding: 0 4px; border: 2px solid var(--card); box-sizing: content-box; }
+  nav button.on .badge { border-color: transparent; }
+
+  /* buildings list */
+  .brow { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 20px; padding: 12px;
+    margin-bottom: 10px; box-shadow: var(--shadow); border: 1px solid var(--line); cursor: pointer; }
+  .brow:active { transform: scale(.99); }
+  .brow .bem { width: 48px; height: 48px; flex: none; border-radius: 16px; display: grid; place-items: center; font-size: 24px;
+    background: color-mix(in srgb, var(--bc) 16%, transparent); border: 1px solid color-mix(in srgb, var(--bc) 30%, transparent); }
+  .brow .bi { flex: 1; min-width: 0; }
+  .brow .bn { font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .brow .bn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brow .bs { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .brow .bs .late { color: var(--danger); }
+  .brow .mini { height: 6px; background: var(--line); border-radius: 9px; overflow: hidden; margin-top: 8px; }
+  .brow .mini i { display: block; height: 100%; border-radius: 9px; background: var(--bc); }
+  .brow .edit { flex: none; width: 40px; height: 40px; border-radius: 14px; border: 1px solid var(--line);
+    background: var(--card2); font-size: 16px; cursor: pointer; }
+
+  /* forms in sheets */
+  label.f { display: block; font-size: 13px; color: var(--muted); margin: 14px 4px 8px; font-weight: 700; }
+  input.in { width: 100%; border-radius: 16px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+    padding: 12px 14px; font: inherit; font-size: 16px; outline: none; }
+  input.in:focus { border-color: var(--accent); }
+  .emojis .chip { font-size: 20px; padding: 6px 0; width: 44px; text-align: center; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; margin-top: 14px; cursor: pointer; }
+  .toggle small { display: block; color: var(--muted); font-size: 12px; }
+  .switch { width: 46px; height: 28px; flex: none; border-radius: 99px; background: var(--line); position: relative; transition: .2s; }
+  .switch::after { content: ""; position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .25); transition: .2s; }
+  .switch.on { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+  .switch.on::after { right: 21px; }
+  .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .sheet-head h3 { margin: 0; }
+
+  /* done celebration */
+  .confetti { position: fixed; top: -12px; width: 8px; height: 14px; border-radius: 2px; z-index: 8; pointer-events: none;
+    animation: drop 1.6s cubic-bezier(.25, .6, .4, 1) forwards; }
+  @keyframes drop { to { transform: translate(var(--dx), 105vh) rotate(var(--r)); opacity: .2; } }
   nav button.on { color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
   .sheet-bg { position: fixed; inset: 0; background: rgba(2, 6, 23, .45); display: none; z-index: 5; backdrop-filter: blur(2px); }
   .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow-y: auto;
@@ -130,9 +173,12 @@
     <div class="hero" id="hero"></div>
     <div class="stats" id="stats"></div>
     <div class="note" id="note"></div>
+    <div id="focus"></div>
     <div class="legend">هر ✅ یه طبقه به ساختمونش اضافه می‌کنه. 🏗 جرثقیل یعنی کار باز داره، ⚠️ و داربست یعنی کار عقب‌افتاده،
       نقشه آبی یعنی هنوز شروع نشده. ⭐ ساختمون‌های اولویت‌دار. روی هر ساختمون بزن تا مرحله و کارهاش رو ببینی.</div>
   </section>
+
+  <section class="view" id="v-buildings"><div id="blist"></div></section>
 
   <section class="view" id="v-today"><div id="today"></div></section>
 
@@ -149,7 +195,8 @@
 
 <nav>
   <button data-v="city" class="on"><b>🏙</b>شهر</button>
-  <button data-v="today"><b>📌</b>امروز</button>
+  <button data-v="buildings"><b>🏢</b>ساختمون‌ها</button>
+  <button data-v="today"><b>📌</b>امروز<span class="badge" id="today-badge" hidden></span></button>
   <button data-v="add"><b>＋</b>کار جدید</button>
 </nav>
 
@@ -167,6 +214,10 @@ if (tg && tg.setHeaderColor) { try { tg.setHeaderColor(dark ? "#0a0f1f" : "#f3f4
 const COLORS = { cityhall: "#d4a373", retail: "#f97362", media: "#8b5cf6", marketing: "#f59e0b",
   smarto: "#14b8a6", technician: "#3b82f6", fitness: "#22c55e", tradebot: "#64748b",
   personal: "#ec4899", vault: "#eab308" };
+const PALETTE = ["#0ea5e9", "#f43f5e", "#a855f7", "#84cc16", "#f97316", "#06b6d4", "#6366f1", "#d946ef"];
+const color = (key) => COLORS[key] || PALETTE[[...String(key)].reduce((n, ch) => n + ch.charCodeAt(0), 0) % PALETTE.length];
+const EMOJIS = ["🏢", "🏪", "🏬", "🏭", "🏦", "🏫", "🏥", "🏠", "🏗", "🏛", "🎬", "📣", "💡", "🦷", "💪", "📈",
+  "👟", "🛒", "💻", "🤖", "🎨", "📚", "✈️", "❤️", "🍳", "🌳", "🔐", "⚙️"];
 const WHEN = [["", "خودکار"], ["1h", "یه ساعت دیگه"], ["evening", "عصر ۱۸"], ["tonight", "امشب ۲۱"],
   ["tomorrow", "فردا"], ["week", "این هفته"], ["none", "یادآوری نمی‌خواد"]];
 const LEVEL_EVERY = 10;
@@ -202,6 +253,7 @@ function toast(msg) {
 async function load() {
   try { S = await api("/api/state"); }
   catch (e) {
+    if (S) return;  // a refresh that failed: keep what's on screen
     document.querySelector("main").innerHTML = e.message === "forbidden"
       ? '<div class="err">این شهر فقط از داخل ربات شهرداری و برای شهردار باز می‌شه.</div>'
       : '<div class="err">به ربات وصل نشدم. یه بار ببند و دوباره باز کن.</div>';
@@ -227,21 +279,25 @@ function render() {
   ];
   $("stats").innerHTML = stats.join("");
   $("note").textContent = fa(S.streak_line);
-  drawCity(); drawToday(); drawChips();
+  drawCity(); drawFocus(); drawBuildings(); drawToday(); drawChips();
+  const badge = $("today-badge"), late = S.today.length;
+  badge.hidden = !late; badge.textContent = fa(late);
 }
 
 /* ---------- the city: a floating isometric diorama ---------- */
 function drawCity() {
   const night = (() => { const h = new Date().getHours(); return h < 6 || h >= 18; })();
-  const W = 390, w = 46, h = 23, cols = 4;
+  // wide streets: each lot is a 64px tile, the building fills only 58% of it
+  const w = 64, h = 32, FP = 0.58, cols = 4;
   const slots = [...S.buildings];
   while (slots.length % cols) slots.push(null);
   if (slots.length < 12) slots.push(null, null, null, null);
   const rows = slots.length / cols;
+  const W = Math.round((cols + rows + 0.7) * w);
   const x0 = W / 2 - ((cols - rows) / 2) * w;
   const most = Math.max(1, ...S.buildings.map((b) => b.floors));
-  const fh = Math.max(3, Math.min(9, 150 / most));
-  const y0 = 56 + Math.min(most, 40) * fh + 30;
+  const fh = Math.max(3.5, Math.min(11, 190 / most));
+  const y0 = 96 + Math.min(most, 40) * fh;
   const pt = (c, r) => [x0 + (c - r) * w, y0 + (c + r) * h];
   const Hsvg = y0 + (cols + rows) * h + 34;
   const tiles = slots.map((b, i) => ({ b, c: i % cols, r: Math.floor(i / cols) }))
@@ -276,13 +332,15 @@ function drawCity() {
   }
 
   // the floating slab
-  const [ax, ay] = pt(-0.65, -0.65), [bx, by] = pt(cols - 0.35, -0.65), [cx, cy] = pt(cols - 0.35, rows - 0.35), [dx, dy] = pt(-0.65, rows - 0.35);
-  const T = 14;
-  let city = `<ellipse cx="${x0}" cy="${cy + T + 14}" rx="${w * 3.2}" ry="16" fill="#000" opacity=".22" filter="url(#soft)"/>
+  const [ax, ay] = pt(-0.85, -0.85), [bx, by] = pt(cols - 0.15, -0.85), [cx, cy] = pt(cols - 0.15, rows - 0.15), [dx, dy] = pt(-0.85, rows - 0.15);
+  const T = 16;
+  let city = `<ellipse cx="${x0}" cy="${cy + T + 14}" rx="${w * 3.4}" ry="18" fill="#000" opacity=".22" filter="url(#soft)"/>
     <polygon points="${dx},${dy} ${cx},${cy} ${cx},${cy + T} ${dx},${dy + T}" fill="${night ? "#0f172a" : "#94a3b8"}"/>
     <polygon points="${cx},${cy} ${bx},${by} ${bx},${by + T} ${cx},${cy + T}" fill="${night ? "#1e293b" : "#a8b5c7"}"/>
     <polygon points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="url(#slabTop)"/>`;
-  // road lanes along the grid
+  // a curb ring, then road lanes along the grid
+  city += `<polygon points="${pt(-0.62, -0.62)} ${pt(cols - 0.38, -0.62)} ${pt(cols - 0.38, rows - 0.38)} ${pt(-0.62, rows - 0.38)}"
+    fill="none" stroke="${night ? "#334155" : "#e2e8f0"}" stroke-width="1.5" opacity=".9"/>`;
   for (let r = 0; r <= rows; r++) {
     const [p1x, p1y] = pt(-0.5, r - 0.5), [p2x, p2y] = pt(cols - 0.5, r - 0.5);
     city += `<line x1="${p1x}" y1="${p1y}" x2="${p2x}" y2="${p2y}" stroke="${night ? "#475569" : "#f8fafc"}" stroke-width="1.2" stroke-dasharray="5 6" opacity=".8"/>`;
@@ -292,13 +350,23 @@ function drawCity() {
     city += `<line x1="${p1x}" y1="${p1y}" x2="${p2x}" y2="${p2y}" stroke="${night ? "#475569" : "#f8fafc"}" stroke-width="1.2" stroke-dasharray="5 6" opacity=".8"/>`;
   }
 
+  // a few cars on the streets
+  [[0, 1, 15], [1, 2, 19], [0, 3, 23], [1, 0, 17]].forEach(([dir, lane, dur], i) => {
+    if (dir === 0 && lane > rows) return;
+    const a = dir === 0 ? pt(-0.5, lane - 0.5) : pt(lane - 0.5, -0.5);
+    const b = dir === 0 ? pt(cols - 0.5, lane - 0.5) : pt(lane - 0.5, rows - 0.5);
+    const tint = ["#f43f5e", "#38bdf8", "#facc15", "#a3e635"][i];
+    city += `<g><ellipse rx="5.5" ry="3" fill="${tint}"/><ellipse rx="2.6" ry="1.5" cy="-1.2" fill="${night ? "#fde68a" : "#fff"}" opacity=".8"/>
+      <animateMotion path="M${a[0]},${a[1]} L${b[0]},${b[1]} L${a[0]},${a[1]}" dur="${dur}s" begin="-${i * 4}s" repeatCount="indefinite"/></g>`;
+  });
+
   tiles.forEach((t, idx) => {
     const [x, y] = pt(t.c, t.r);
-    const b = t.b, tw = w * 0.78, th = h * 0.78;
+    const b = t.b, tw = w * FP, th = h * FP;
     const lot = (k) => `${x},${y - h * k} ${x + w * k},${y} ${x},${y + h * k} ${x - w * k},${y}`;
     if (!b) {   // a little park
-      city += `<polygon points="${lot(.86)}" fill="url(#grass)" opacity=".95"/>`;
-      for (const [ox, oy, s] of [[-14, -3, 1], [12, 1, .85], [0, 9, .95]]) {
+      city += `<polygon points="${lot(.78)}" fill="url(#grass)" opacity=".95"/>`;
+      for (const [ox, oy, s] of [[-17, -2, 1], [15, 1, .85], [0, 10, .95], [2, -11, .75]]) {
         city += `<ellipse cx="${x + ox + 4}" cy="${y + oy + 1}" rx="${8 * s}" ry="${3.5 * s}" fill="#000" opacity=".18"/>
           <rect x="${x + ox - 1.3}" y="${y + oy - 9 * s}" width="2.6" height="${9 * s}" rx="1" fill="#7c4a1e"/>
           <circle cx="${x + ox}" cy="${y + oy - 14 * s}" r="${8.5 * s}" fill="#15803d"/>
@@ -306,11 +374,12 @@ function drawCity() {
       }
       return;
     }
-    const c = COLORS[b.key] || "#94a3b8", id = b.key;
+    const c = color(b.key), id = b.key;
     defs += `<linearGradient id="L${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, .92)}"/><stop offset="1" stop-color="${shade(c, .62)}"/></linearGradient>
       <linearGradient id="R${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, 1.12)}"/><stop offset="1" stop-color="${shade(c, .82)}"/></linearGradient>
       <linearGradient id="T${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${shade(c, 1.35)}"/><stop offset="1" stop-color="${shade(c, 1.08)}"/></linearGradient>`;
-    let g = `<polygon points="${lot(.9)}" fill="${night ? "#273449" : "#f1f5f9"}" opacity=".9"/>`;
+    let g = `<polygon points="${lot(.8)}" fill="${night ? "#273449" : "#f8fafc"}" opacity=".95"/>
+      <polygon points="${lot(.8)}" fill="transparent"/>`;
     let labelY;
     if (b.floors === 0) {
       // blueprint of the future building
@@ -324,14 +393,14 @@ function drawCity() {
     } else {
       const n = Math.min(b.floors, 40), H = 8 + n * fh;
       g += `<ellipse cx="${x + 18}" cy="${y + 8}" rx="${tw + 10}" ry="${th}" fill="#000" opacity="${night ? .35 : .2}" filter="url(#soft)"/>`;
-      if (b.overdue) g += `<polygon points="${lot(.95)}" fill="none" stroke="#f59e0b" stroke-width="2.4" filter="url(#glow)">
+      if (b.overdue) g += `<polygon points="${lot(.84)}" fill="none" stroke="#f59e0b" stroke-width="2.4" filter="url(#glow)">
         <animate attributeName="opacity" values=".25;1;.25" dur="1.6s" repeatCount="indefinite"/></polygon>`;
       g += `<polygon points="${x - tw},${y} ${x},${y + th} ${x},${y + th - H} ${x - tw},${y - H}" fill="url(#L${id})"/>
         <polygon points="${x},${y + th} ${x + tw},${y} ${x + tw},${y - H} ${x},${y + th - H}" fill="url(#R${id})"/>`;
       // windows: glass by day, warm lights by night
       if (fh >= 5) for (let i = 0; i < n; i++) {
         const yy = y - 8 - i * fh + 1.5;
-        for (const [k, j] of [[0.2, 0], [0.55, 1]]) {
+        for (const [k, j] of [[0.13, 0], [0.43, 1], [0.73, 2]]) {
           const on = !night || rnd(idx * 97 + i * 7 + j) > .3;
           const col = night ? (on ? "#fde68a" : "#1e293b") : "#e0f2fe";
           const op = night ? (on ? .95 : .7) : .75;
@@ -364,11 +433,11 @@ function drawCity() {
     }
     // a glass label with the building, its floors and a priority dot
     const txt = `${b.emoji}${b.floors ? " " + fa(b.floors) : ""}`;
-    const lw = 26 + (b.floors ? String(b.floors).length * 7 : 0) + (b.priority ? 8 : 0) + (b.overdue ? 12 : 0);
+    const lw = 30 + (b.floors ? String(b.floors).length * 8 : 0) + (b.priority ? 9 : 0) + (b.overdue ? 14 : 0);
     g += `<g transform="translate(${x},${labelY})">
-      <rect x="${-lw / 2}" y="-13" width="${lw}" height="19" rx="9.5" fill="${night ? "rgba(15,23,42,.6)" : "rgba(255,255,255,.75)"}" stroke="${night ? "rgba(255,255,255,.25)" : "rgba(255,255,255,.95)"}"/>
-      <text x="${b.priority ? 3 : 0}" y="1" font-size="10.5" font-weight="700" fill="${night ? "#fff" : "#0f172a"}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${b.overdue ? "⚠️" : ""}${txt}</text>
-      ${b.priority ? `<circle cx="${lw / 2 - 7}" cy="-3.5" r="3" fill="#fbbf24" stroke="#fff" stroke-width="1"/>` : ""}</g>`;
+      <rect x="${-lw / 2}" y="-14" width="${lw}" height="22" rx="11" fill="${night ? "rgba(15,23,42,.6)" : "rgba(255,255,255,.75)"}" stroke="${night ? "rgba(255,255,255,.25)" : "rgba(255,255,255,.95)"}"/>
+      <text x="${b.priority ? 3 : 0}" y="2" font-size="12" font-weight="700" fill="${night ? "#fff" : "#0f172a"}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${b.overdue ? "⚠️" : ""}${txt}</text>
+      ${b.priority ? `<circle cx="${lw / 2 - 8}" cy="-3" r="3.4" fill="#fbbf24" stroke="#fff" stroke-width="1"/>` : ""}</g>`;
     city += `<g class="bld" data-b="${b.key}">${g}</g>`;
   });
 
@@ -385,7 +454,7 @@ function stageOf(n) {
 }
 
 function stageArt(b) {
-  const c = COLORS[b.key] || "#94a3b8", d = shade(c, .72), l = shade(c, 1.15), n = b.floors;
+  const c = color(b.key), d = shade(c, .72), l = shade(c, 1.15), n = b.floors;
   let s = `<defs><linearGradient id="sa" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${l}"/><stop offset="1" stop-color="${d}"/></linearGradient>
     <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.5" height="8" fill="#f59e0b"/></pattern></defs>
     <ellipse cx="80" cy="96" rx="64" ry="10" fill="#22c55e" opacity=".85"/>`;
@@ -426,7 +495,7 @@ function card(t, opts = {}) {
   if (t.staff) meta.push(`<span>👥 پرسنل</span>`);
   if (t.board === "waiting") meta.push(`<span>⏳ در انتظار</span>`);
   if (t.script) meta.push(`<span>📝 سناریو</span>`);
-  return `<div class="card" data-id="${t.id}" style="--bc:${t.overdue ? "var(--danger)" : COLORS[t.building] || "var(--accent)"}">
+  return `<div class="card" data-id="${t.id}" style="--bc:${t.overdue ? "var(--danger)" : color(t.building)}">
     <div class="t">${esc(t.title)}</div>
     ${meta.length ? `<div class="meta">${meta.join("")}</div>` : ""}
     <div class="acts">
@@ -452,19 +521,101 @@ function drawToday() {
   bindCards($("today"));
 }
 
+/* ---------- the one task to do now ---------- */
+function drawFocus() {
+  const t = S.today[0];
+  $("focus").innerHTML = t
+    ? `<h2>🎯 کار مهم الان</h2>${card(t)}` + (S.today.length > 1
+      ? `<button class="b wide" id="see-today" style="margin-top:0">📌 ${fa(S.today.length - 1)} کار دیگه امروز</button>` : "")
+    : `<h2>🎯 کار مهم الان</h2><div class="card"><div class="t">امروز کاری نمونده 🎉</div>
+       <div class="meta">یه ساختمون رو انتخاب کن و قدم بعدیش رو بردار.</div></div>`;
+  bindCards($("focus"));
+  if ($("see-today")) $("see-today").onclick = () => show("today");
+}
+
+/* ---------- buildings tab ---------- */
+function drawBuildings() {
+  const rows = S.buildings.map((b) => {
+    const st = stageOf(b.floors);
+    const pct = st.next ? ((b.floors - STAGES[st.i][0]) / (st.next[0] - STAGES[st.i][0])) * 100 : 100;
+    const bits = [b.floors ? `${st.name}، ${floors(b.floors)}` : "زمین خالی", b.open ? `${fa(b.open)} کار باز` : "بدون کار باز"];
+    if (b.overdue) bits.push(`<span class="late">⚠️ ${fa(b.overdue)} عقب‌افتاده</span>`);
+    return `<div class="brow" data-k="${b.key}" style="--bc:${color(b.key)}">
+      <div class="bem">${b.emoji}</div>
+      <div class="bi"><div class="bn"><span>${esc(b.name)}</span>${b.priority ? "⭐" : ""}</div>
+        <div class="bs">${bits.join(" • ")}</div><div class="mini"><i style="width:${Math.max(pct, 4)}%"></i></div></div>
+      <button class="edit" data-edit="${b.key}" aria-label="ویرایش">✏️</button></div>`;
+  });
+  $("blist").innerHTML = `<h2>🏢 ساختمون‌های شهر (${fa(S.buildings.length)})</h2>${rows.join("")}
+    <button class="b wide" id="new-b" style="margin-top:4px">＋ ساختمون جدید</button>
+    <div class="legend">روی ✏️ بزن تا اسم، نماد یا اولویتش رو عوض کنی. ساختمون‌های ⭐ اول لیست و پیام صبح میان.</div>`;
+  $("blist").querySelectorAll(".brow").forEach((el) => el.onclick = (e) => {
+    if (e.target.closest(".edit")) return editBuilding(el.dataset.k);
+    openBuilding(el.dataset.k);
+  });
+  $("new-b").onclick = () => editBuilding(null);
+}
+
+function editBuilding(key) {
+  const b = key ? bmap()[key] : { name: "", emoji: "🏢", priority: false };
+  let emoji = b.emoji, prio = b.priority;
+  const list = EMOJIS.includes(emoji) ? EMOJIS : [emoji, ...EMOJIS];
+  sheet(`<h3>${key ? "✏️ ویرایش ساختمون" : "＋ ساختمون جدید"}</h3>
+    <label class="f">اسم</label><input class="in" id="e-name" maxlength="30" value="${esc(b.name)}" placeholder="مثلاً: فروشگاه دوم">
+    <label class="f">نماد</label><div class="chips emojis" id="e-emoji">${list.map((e) =>
+      `<button class="chip ${e === emoji ? "on" : ""}" data-e="${e}">${e}</button>`).join("")}</div>
+    <div class="toggle" id="e-prio"><div>⭐ اولویت‌دار<small>اول لیست و پیام صبح میاد</small></div>
+      <div class="switch ${prio ? "on" : ""}"></div></div>
+    <button class="b main wide" id="e-save">${key ? "ذخیره" : "ساختن ساختمون"}</button>`);
+  $("e-emoji").querySelectorAll(".chip").forEach((c) => c.onclick = () => {
+    emoji = c.dataset.e; $("e-emoji").querySelectorAll(".chip").forEach((x) => x.classList.toggle("on", x === c));
+  });
+  $("e-prio").onclick = () => { prio = !prio; $("e-prio").querySelector(".switch").classList.toggle("on", prio); };
+  if (!key) setTimeout(() => $("e-name").focus(), 300);
+  $("e-save").onclick = async () => {
+    const name = $("e-name").value.trim();
+    if (!name) return toast("یه اسم براش بنویس.");
+    try {
+      const r = await api(key ? `/api/building/${key}` : "/api/building", { name, emoji, priority: prio });
+      if (tg) tg.HapticFeedback.notificationOccurred("success");
+      toast(r.message); closeSheet(); await load();
+    } catch (e) { toast("ذخیره نشد، دوباره امتحان کن."); }
+  };
+}
+
 function openBuilding(key) {
   const b = bmap()[key];
   if (tg) tg.HapticFeedback.selectionChanged();
-  sheet(`<h3>${b.emoji} ${esc(b.name)}</h3>` + stageCard(b) +
+  sheet(`<div class="sheet-head"><h3>${b.emoji} ${esc(b.name)}</h3><button class="b" id="edit-here">✏️ ویرایش</button></div>` + stageCard(b) +
     (b.tasks.length ? b.tasks.map((t) => card(t, { noBuilding: true })).join("")
       : '<div class="empty">این ساختمون فعلاً کار بازی نداره.</div>') +
     `<button class="b wide" id="add-here">＋ کار جدید برای ${esc(b.name)}</button>`);
   bindCards($("sheet"));
+  $("edit-here").onclick = () => editBuilding(key);
   $("add-here").onclick = () => { closeSheet(); pick.building = key; drawChips(); show("add"); $("text").focus(); };
 }
 
-function sheet(html) { $("sheet").innerHTML = html; $("sheet").scrollTop = 0; $("sheet").classList.add("on"); $("sheet-bg").classList.add("on"); }
-function closeSheet() { $("sheet").classList.remove("on"); $("sheet-bg").classList.remove("on"); }
+function sheet(html) {
+  $("sheet").innerHTML = html; $("sheet").scrollTop = 0; $("sheet").classList.add("on"); $("sheet-bg").classList.add("on");
+  if (tg && tg.BackButton) tg.BackButton.show();
+}
+function closeSheet() {
+  $("sheet").classList.remove("on"); $("sheet-bg").classList.remove("on");
+  if (tg && tg.BackButton) tg.BackButton.hide();
+}
+if (tg && tg.BackButton) tg.BackButton.onClick(closeSheet);
+
+function celebrate() {
+  const cols = ["#f43f5e", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
+  for (let i = 0; i < 36; i++) {
+    const c = document.createElement("i");
+    c.className = "confetti";
+    c.style.cssText = `left:${Math.random() * 100}vw;background:${cols[i % cols.length]};--dx:${(Math.random() - .5) * 160}px;` +
+      `--r:${Math.random() * 720 - 360}deg;animation-delay:${Math.random() * .25}s`;
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 2000);
+  }
+}
 $("sheet-bg").onclick = closeSheet;
 
 function choose(title, options, done) {
@@ -476,7 +627,7 @@ function choose(title, options, done) {
 async function act(id, action, body) {
   try {
     const r = await api(`/api/task/${id}/${action}`, body || {});
-    if (action === "done" && tg) tg.HapticFeedback.notificationOccurred("success");
+    if (action === "done") { celebrate(); if (tg) tg.HapticFeedback.notificationOccurred("success"); }
     toast(r.message); closeSheet(); await load();
   } catch (e) { toast("نشد، دوباره امتحان کن."); }
 }
@@ -489,7 +640,7 @@ function cardAction(id, a) {
   choose("این کار رو چی کنیم؟",
     [["staff", "👥 بده به پرسنل"], ["stuck", "🧱 گیر کردم"], ["move", "🏷 تغییر ساختمون"], ["drop", "🗑 حذف"]],
     (v) => {
-      if (v === "move") return choose("کدوم ساختمون؟", S.buildings.map((b) => [b.key, b.emoji + " " + b.name]),
+      if (v === "move") return choose("کدوم ساختمون؟", S.buildings.map((b) => [b.key, b.emoji + " " + esc(b.name)]),
         (k) => act(id, "building", { building: k }));
       if (v === "drop" && !confirm("این کار حذف بشه؟")) return;
       act(id, v);
@@ -521,6 +672,10 @@ function show(v) {
   window.scrollTo(0, 0);
 }
 document.querySelectorAll("nav button").forEach((b) => b.onclick = () => show(b.dataset.v));
+
+// come back to fresh numbers (and the right sky) after switching apps
+document.addEventListener("visibilitychange", () => { if (!document.hidden && S) load(); });
+if (tg && tg.onEvent) tg.onEvent("activated", () => S && load());
 
 load();
 </script>

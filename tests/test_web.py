@@ -72,3 +72,19 @@ def test_api_adds_and_completes_a_task():
         state = await (await client.get("/api/state", headers=h)).json()
         assert next(b for b in state["buildings"] if b["key"] == "media")["floors"] == 1
     run(check)
+
+
+def test_api_renames_and_adds_buildings():
+    async def check(client, city):
+        h = {"X-Init-Data": signed(OWNER)}
+        r = await client.post("/api/building/retail", json={"name": "کراکس شاپ", "emoji": "👟", "priority": True}, headers=h)
+        assert r.status == 200
+        r = await client.post("/api/building", json={"name": "باغ", "emoji": "🌳"}, headers=h)
+        key = (await r.json())["key"]
+        r = await client.post("/api/building/nope", json={"name": "x"}, headers=h)
+        assert r.status == 404
+        data = await (await client.get("/api/state", headers=h)).json()
+        by = {b["key"]: b for b in data["buildings"]}
+        assert by["retail"]["name"] == "کراکس شاپ" and by["retail"]["emoji"] == "👟" and by["retail"]["priority"]
+        assert by[key]["name"] == "باغ" and by[key]["custom"] and not by["retail"]["custom"]
+    run(check)
