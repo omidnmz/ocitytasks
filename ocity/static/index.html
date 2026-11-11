@@ -5,115 +5,133 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>شهر OCity</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: var(--tg-theme-bg-color, #f4f1ea);
-    --card: var(--tg-theme-secondary-bg-color, #ffffff);
-    --text: var(--tg-theme-text-color, #1d1b18);
-    --muted: var(--tg-theme-hint-color, #8a847a);
-    --accent: var(--tg-theme-button-color, #2f6fde);
-    --accent-text: var(--tg-theme-button-text-color, #ffffff);
-    --line: color-mix(in srgb, var(--text) 12%, transparent);
-    --danger: #d9534f;
-    --ok: #2e9b5f;
-    --sky1: #bfdcf5;
-    --sky2: #f6e7cf;
+    --bg: #f3f4fa; --card: #ffffff; --card2: #f7f8fc; --text: #0f172a; --muted: #64748b;
+    --line: rgba(15, 23, 42, .08); --shadow: 0 8px 24px rgba(15, 23, 42, .07);
+    --accent: #6366f1; --accent2: #8b5cf6; --accent-text: #fff;
+    --danger: #ef4444; --warn: #f59e0b; --ok: #10b981;
+    --glass: rgba(255, 255, 255, .72);
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-tg]) { --bg: #16181d; --card: #20232a; --text: #ecebe8; --muted: #8d8f96; }
+  :root.dark {
+    --bg: #0a0f1f; --card: #131a2e; --card2: #182039; --text: #e8ebf5; --muted: #8b93ad;
+    --line: rgba(255, 255, 255, .08); --shadow: 0 8px 28px rgba(0, 0, 0, .35);
+    --glass: rgba(19, 26, 46, .72);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font-family: "Vazirmatn", Tahoma, system-ui, sans-serif; font-size: 15px; }
-  body { padding-bottom: 76px; }
-  header { padding: 14px 16px 8px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  header h1 { font-size: 18px; margin: 0; flex: 1 1 auto; }
-  .pill { background: var(--card); border-radius: 999px; padding: 5px 11px; font-size: 13px;
-    border: 1px solid var(--line); white-space: nowrap; }
+  body { padding-bottom: 96px; }
+  button { font-family: inherit; }
+
+  header { padding: 16px 16px 10px; display: flex; align-items: center; gap: 10px; }
+  header .logo { width: 40px; height: 40px; border-radius: 14px; display: grid; place-items: center; font-size: 20px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 16px rgba(99, 102, 241, .35); }
+  header h1 { font-size: 18px; margin: 0; font-weight: 800; letter-spacing: -.2px; }
+  header .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
   main { padding: 0 16px; }
-  .view { display: none; } .view.on { display: block; }
+  .view { display: none; } .view.on { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-  /* the skyline */
-  .sky { position: relative; border-radius: 18px; overflow: hidden;
-    background: linear-gradient(var(--sky1), var(--sky2)); }
-  .night .sky { background: linear-gradient(#1d2b4a, #3b3a5a); }
-  .sky svg { display: block; width: 100%; height: auto; }
-  .sky g.bld { cursor: pointer; }
-  .xp { margin: 0 16px 4px; background: color-mix(in srgb, var(--text) 10%, transparent); border-radius: 99px;
-    height: 9px; overflow: hidden; }
-  .xp i { display: block; height: 100%; background: linear-gradient(90deg, #f5b942, #f08a3c); border-radius: 99px;
-    transition: width .6s ease; }
-  .xpl { margin: 0 16px 10px; font-size: 12px; color: var(--muted); }
-  .stage { display: flex; gap: 12px; align-items: center; background: var(--card); border-radius: 14px;
-    padding: 10px; border: 1px solid var(--line); margin-bottom: 12px; }
-  .stage .art { width: 120px; flex: none; border-radius: 10px; overflow: hidden;
-    background: linear-gradient(#cfe6f7, #f3ead8); }
+  /* hero city */
+  .hero { position: relative; border-radius: 26px; overflow: hidden; box-shadow: var(--shadow);
+    background: linear-gradient(180deg, #5b8def 0%, #a78bfa 55%, #fbcfe8 100%); }
+  .hero.night { background: linear-gradient(180deg, #070b1d 0%, #1e1b4b 58%, #5b21b6 100%); }
+  .hero svg { display: block; width: 100%; height: auto; }
+  .hero g.bld { cursor: pointer; transition: transform .2s; }
+  .hero .chip-time { position: absolute; top: 12px; right: 12px; font-size: 11px; color: #fff;
+    background: rgba(255, 255, 255, .18); border: 1px solid rgba(255, 255, 255, .35); padding: 4px 10px;
+    border-radius: 99px; backdrop-filter: blur(8px); }
+
+  /* stats */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0 6px; }
+  .stat { background: var(--card); border-radius: 18px; padding: 10px; box-shadow: var(--shadow);
+    border: 1px solid var(--line); display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .stat .ic { width: 38px; height: 38px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 16px; }
+  .stat .v { font-weight: 800; font-size: 17px; line-height: 1.1; }
+  .stat .k { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .ring { background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--line) 0); position: relative; }
+  .ring::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--card); }
+  .ring span { position: relative; z-index: 1; }
+  .legend { color: var(--muted); font-size: 12px; margin: 10px 4px 16px; line-height: 1.8; }
+  .note { font-size: 12px; color: var(--muted); margin: 2px 4px 0; }
+
+  /* stage card */
+  .stage { display: flex; gap: 12px; align-items: center; background: var(--card2); border-radius: 20px;
+    padding: 12px; border: 1px solid var(--line); margin-bottom: 14px; }
+  .stage .art { width: 116px; flex: none; border-radius: 16px; overflow: hidden;
+    background: linear-gradient(180deg, #93c5fd, #c4b5fd 60%, #fbcfe8); }
   .stage .info { flex: 1; min-width: 0; }
-  .stage .lvl { font-weight: 700; }
-  .stage .bar { height: 8px; background: color-mix(in srgb, var(--text) 10%, transparent); border-radius: 9px;
-    overflow: hidden; margin: 8px 0 6px; }
-  .stage .bar i { display: block; height: 100%; background: #4bb06b; border-radius: 9px; }
-  .stage .sub { font-size: 12px; color: var(--muted); line-height: 1.6; }
-  .legend { color: var(--muted); font-size: 12px; margin: 8px 2px 14px; line-height: 1.7; }
+  .stage .lvl { font-weight: 800; font-size: 15px; }
+  .stage .bar { height: 10px; background: var(--line); border-radius: 9px; overflow: hidden; margin: 10px 0 8px; }
+  .stage .bar i { display: block; height: 100%; border-radius: 9px; background: linear-gradient(90deg, #34d399, #10b981); }
+  .stage .sub { font-size: 12px; color: var(--muted); line-height: 1.7; }
 
-  /* lists */
-  h2 { font-size: 15px; margin: 18px 2px 8px; color: var(--muted); font-weight: 600; }
-  .card { background: var(--card); border-radius: 14px; padding: 12px; margin-bottom: 10px;
-    border: 1px solid var(--line); }
-  .card .t { font-weight: 600; line-height: 1.5; }
-  .card .meta { color: var(--muted); font-size: 12px; margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
-  .card.late { border-color: color-mix(in srgb, var(--danger) 55%, transparent); }
-  .acts { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  button.b { border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px;
-    background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text); cursor: pointer; }
-  button.b.main { background: var(--accent); color: var(--accent-text); }
-  button.b.warn { color: var(--danger); }
-  .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+  /* task cards */
+  h2 { font-size: 14px; margin: 18px 4px 10px; color: var(--muted); font-weight: 700; }
+  .card { background: var(--card); border-radius: 20px; padding: 14px; margin-bottom: 10px; box-shadow: var(--shadow);
+    border: 1px solid var(--line); border-inline-start: 4px solid var(--bc, var(--accent)); }
+  .card .t { font-weight: 700; line-height: 1.6; }
+  .card .meta { color: var(--muted); font-size: 12px; margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .card .meta span { background: var(--card2); border: 1px solid var(--line); border-radius: 99px; padding: 2px 8px; }
+  .card .meta span.late { color: var(--danger); border-color: rgba(239, 68, 68, .3); background: rgba(239, 68, 68, .08); }
+  .acts { display: flex; gap: 8px; margin-top: 12px; }
+  button.b { border: 0; border-radius: 14px; padding: 9px 14px; font-size: 14px; font-weight: 500;
+    background: var(--card2); color: var(--text); cursor: pointer; border: 1px solid var(--line); }
+  button.b.main { flex: 1; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border: 0;
+    box-shadow: 0 6px 14px rgba(99, 102, 241, .3); }
+  button.b:active { transform: scale(.97); }
+  .empty { text-align: center; color: var(--muted); padding: 34px 10px; line-height: 1.9; }
+  .empty b { font-size: 34px; display: block; }
 
   /* new task */
-  textarea { width: 100%; min-height: 90px; border-radius: 14px; border: 1px solid var(--line);
-    background: var(--card); color: var(--text); padding: 12px; font: inherit; resize: vertical; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px;
-    padding: 7px 12px; font: inherit; font-size: 13px; cursor: pointer; }
-  .chip.on { background: var(--accent); color: var(--accent-text); border-color: transparent; }
-  .wide { width: 100%; margin-top: 16px; padding: 13px; font-size: 16px; }
+  textarea { width: 100%; min-height: 100px; border-radius: 20px; border: 1px solid var(--line); box-shadow: var(--shadow);
+    background: var(--card); color: var(--text); padding: 14px; font: inherit; resize: vertical; outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 14px;
+    padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  .chip.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border-color: transparent; }
+  .wide { width: 100%; margin-top: 18px; padding: 14px; font-size: 16px; }
 
-  /* tabs, sheet, toast */
-  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--card);
-    border-top: 1px solid var(--line); padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); }
-  nav button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12px;
-    padding: 6px 0; border-radius: 10px; cursor: pointer; }
-  nav button b { display: block; font-size: 20px; font-weight: normal; }
-  nav button.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-  .sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; z-index: 5; }
-  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 80vh; overflow-y: auto;
-    background: var(--bg); border-radius: 20px 20px 0 0; padding: 16px 16px 28px; transform: translateY(100%);
-    transition: transform .25s ease; z-index: 6; }
+  /* nav, sheet, toast */
+  nav { position: fixed; bottom: calc(12px + env(safe-area-inset-bottom)); left: 16px; right: 16px; display: flex; gap: 6px;
+    background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--line); border-radius: 24px; padding: 6px; box-shadow: 0 12px 30px rgba(15, 23, 42, .18); z-index: 4; }
+  nav button { flex: 1; border: 0; background: none; color: var(--muted); font-size: 12px; font-weight: 500;
+    padding: 8px 0; border-radius: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  nav button b { font-size: 18px; font-weight: normal; }
+  nav button.on { color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .sheet-bg { position: fixed; inset: 0; background: rgba(2, 6, 23, .45); display: none; z-index: 5; backdrop-filter: blur(2px); }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; max-height: 82vh; overflow-y: auto;
+    background: var(--bg); border-radius: 28px 28px 0 0; padding: 10px 16px 30px; transform: translateY(100%);
+    transition: transform .3s cubic-bezier(.2, .8, .2, 1); z-index: 6; }
+  .sheet::before { content: ""; display: block; width: 42px; height: 5px; border-radius: 9px; background: var(--line);
+    margin: 0 auto 14px; }
   .sheet.on { transform: none; } .sheet-bg.on { display: block; }
-  .sheet h3 { margin: 0 0 12px; font-size: 17px; }
-  .toast { position: fixed; left: 16px; right: 16px; bottom: 86px; background: #222; color: #fff;
-    padding: 12px 14px; border-radius: 12px; font-size: 14px; opacity: 0; transition: opacity .2s;
-    pointer-events: none; z-index: 7; white-space: pre-line; }
-  .toast.on { opacity: .95; }
+  .sheet h3 { margin: 0 0 12px; font-size: 18px; font-weight: 800; }
+  .toast { position: fixed; left: 24px; right: 24px; bottom: 96px; background: #0f172a; color: #fff;
+    padding: 12px 16px; border-radius: 16px; font-size: 14px; opacity: 0; transform: translateY(8px);
+    transition: .25s; pointer-events: none; z-index: 7; white-space: pre-line; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+  .toast.on { opacity: .96; transform: none; }
   .err { padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.8; }
 </style>
 </head>
 <body>
 <header>
-  <h1>🏙 شهر OCity</h1>
-  <span class="pill" id="level">⭐ …</span>
-  <span class="pill" id="streak">🔥 …</span>
-  <span class="pill" id="buffer" hidden></span>
+  <div class="logo">🏙</div>
+  <div><h1>شهر OCity</h1><div class="sub" id="sub">…</div></div>
 </header>
-<div class="xp"><i id="xp"></i></div>
-<div class="xpl" id="xpl"></div>
 
 <main>
   <section class="view on" id="v-city">
-    <div class="sky" id="sky"></div>
-    <div class="legend">هر ✅ یه طبقه به ساختمونش اضافه می‌کنه. 🏗 جرثقیل یعنی کار باز داره، داربست و 🚧 یعنی کار عقب‌افتاده،
-      زمین خالی یعنی هنوز شروع نشده. ⭐ ساختمون‌های اولویت‌دار. روی هر ساختمون بزن تا مرحله و کارهاش رو ببینی.</div>
+    <div class="hero" id="hero"></div>
+    <div class="stats" id="stats"></div>
+    <div class="note" id="note"></div>
+    <div class="legend">هر ✅ یه طبقه به ساختمونش اضافه می‌کنه. 🏗 جرثقیل یعنی کار باز داره، ⚠️ و داربست یعنی کار عقب‌افتاده،
+      نقشه آبی یعنی هنوز شروع نشده. ⭐ ساختمون‌های اولویت‌دار. روی هر ساختمون بزن تا مرحله و کارهاش رو ببینی.</div>
   </section>
 
   <section class="view" id="v-today"><div id="today"></div></section>
@@ -132,7 +150,7 @@
 <nav>
   <button data-v="city" class="on"><b>🏙</b>شهر</button>
   <button data-v="today"><b>📌</b>امروز</button>
-  <button data-v="add"><b>➕</b>کار جدید</button>
+  <button data-v="add"><b>＋</b>کار جدید</button>
 </nav>
 
 <div class="sheet-bg" id="sheet-bg"></div>
@@ -141,14 +159,18 @@
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); document.documentElement.dataset.tg = "1";
-  if (tg.colorScheme === "dark") document.body.classList.add("night"); }
+if (tg) { tg.ready(); tg.expand(); }
+const dark = tg && tg.colorScheme ? tg.colorScheme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+if (dark) document.documentElement.classList.add("dark");
+if (tg && tg.setHeaderColor) { try { tg.setHeaderColor(dark ? "#0a0f1f" : "#f3f4fa"); tg.setBackgroundColor(dark ? "#0a0f1f" : "#f3f4fa"); } catch (e) {} }
 
-const COLORS = { cityhall: "#c9a96e", retail: "#e0745a", media: "#8b6fd6", marketing: "#e2a93b",
-  smarto: "#3fa7a0", technician: "#6c9bd2", fitness: "#5fb36a", tradebot: "#7a8a99",
-  personal: "#d98bb0", vault: "#b9a24c" };
+const COLORS = { cityhall: "#d4a373", retail: "#f97362", media: "#8b5cf6", marketing: "#f59e0b",
+  smarto: "#14b8a6", technician: "#3b82f6", fitness: "#22c55e", tradebot: "#64748b",
+  personal: "#ec4899", vault: "#eab308" };
 const WHEN = [["", "خودکار"], ["1h", "یه ساعت دیگه"], ["evening", "عصر ۱۸"], ["tonight", "امشب ۲۱"],
   ["tomorrow", "فردا"], ["week", "این هفته"], ["none", "یادآوری نمی‌خواد"]];
+const LEVEL_EVERY = 10;
+const STAGES = [[0, "زمین خالی"], [1, "پی"], [3, "خونه"], [7, "ساختمون"], [13, "برج"], [25, "آسمان‌خراش"]];
 let S = null, pick = { building: "", when: "" };
 
 const $ = (id) => document.getElementById(id);
@@ -156,6 +178,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const fa = (n) => String(n).replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
 const floors = (n) => n ? fa(n) + " طبقه" : "زمین خالی";
 const bmap = () => Object.fromEntries(S.buildings.map((b) => [b.key, b]));
+const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16);
+  const ch = (v) => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${ch(n >> 16)},${ch((n >> 8) & 255)},${ch(n & 255)})`; };
+const rnd = (seed) => { const x = Math.sin(seed * 999.7) * 10000; return x - Math.floor(x); };
 
 async function api(path, body) {
   const r = await fetch(path, {
@@ -170,7 +196,7 @@ async function api(path, body) {
 
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.classList.add("on");
-  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 2200);
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 2300);
 }
 
 async function load() {
@@ -185,112 +211,197 @@ async function load() {
 }
 
 function render() {
-  $("streak").textContent = "🔥 " + fa(S.streak) + " روز";
   const total = S.buildings.reduce((n, b) => n + b.floors, 0);
-  $("level").textContent = "⭐ سطح " + fa(Math.floor(total / LEVEL_EVERY) + 1);
-  $("xp").style.width = ((total % LEVEL_EVERY) / LEVEL_EVERY * 100) + "%";
-  $("xpl").textContent = `${fa(total)} طبقه ساخته شده، ${fa(LEVEL_EVERY - total % LEVEL_EVERY)} ✅ دیگه تا سطح بعدی شهر`;
-  if (S.buffer !== null) { $("buffer").hidden = false; $("buffer").textContent = "🎬 ذخیره محتوا: " + fa(S.buffer); }
+  const level = Math.floor(total / LEVEL_EVERY) + 1, into = total % LEVEL_EVERY;
+  $("sub").textContent = `${fa(LEVEL_EVERY - into)} ✅ دیگه تا سطح ${fa(level + 1)}`;
+  const stats = [
+    `<div class="stat"><div class="ic ring" style="--p:${into / LEVEL_EVERY * 100}"><span>⭐</span></div>
+      <div><div class="v">${fa(level)}</div><div class="k">سطح شهر</div></div></div>`,
+    `<div class="stat"><div class="ic" style="background:rgba(249,115,22,.12)">🔥</div>
+      <div><div class="v">${fa(S.streak)}</div><div class="k">روز پیاپی</div></div></div>`,
+    S.buffer !== null
+      ? `<div class="stat"><div class="ic" style="background:rgba(139,92,246,.14)">🎬</div>
+        <div><div class="v">${fa(S.buffer)}</div><div class="k">محتوا آماده</div></div></div>`
+      : `<div class="stat"><div class="ic" style="background:rgba(16,185,129,.12)">🧱</div>
+        <div><div class="v">${fa(total)}</div><div class="k">طبقه</div></div></div>`,
+  ];
+  $("stats").innerHTML = stats.join("");
+  $("note").textContent = fa(S.streak_line);
   drawCity(); drawToday(); drawChips();
 }
 
-const LEVEL_EVERY = 10;
-const STAGES = [[0, "زمین خالی"], [1, "پی"], [3, "خونه"], [7, "ساختمون"], [13, "برج"], [25, "آسمان‌خراش"]];
-const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16);
-  const ch = (v) => Math.max(0, Math.min(255, Math.round(v * k)));
-  return `rgb(${ch(n >> 16)},${ch((n >> 8) & 255)},${ch(n & 255)})`; };
-
+/* ---------- the city: a floating isometric diorama ---------- */
 function drawCity() {
-  // an isometric block: 4 columns, buildings in priority order, parks in the free lots
-  const W = 390, w = 46, h = 23, x0 = W / 2, cols = 4;
+  const night = (() => { const h = new Date().getHours(); return h < 6 || h >= 18; })();
+  const W = 390, w = 46, h = 23, cols = 4;
   const slots = [...S.buildings];
   while (slots.length % cols) slots.push(null);
   if (slots.length < 12) slots.push(null, null, null, null);
   const rows = slots.length / cols;
+  const x0 = W / 2 - ((cols - rows) / 2) * w;
   const most = Math.max(1, ...S.buildings.map((b) => b.floors));
   const fh = Math.max(3, Math.min(9, 150 / most));
-  const top = 30 + Math.min(most, 40) * fh + 40;
-  const y0 = top;
+  const y0 = 56 + Math.min(most, 40) * fh + 30;
   const pt = (c, r) => [x0 + (c - r) * w, y0 + (c + r) * h];
-  const H_ = y0 + (cols + rows) * h + 10;
+  const Hsvg = y0 + (cols + rows) * h + 34;
   const tiles = slots.map((b, i) => ({ b, c: i % cols, r: Math.floor(i / cols) }))
     .sort((p, q) => (p.c + p.r) - (q.c + q.r) || p.c - q.c);
-  const [ax, ay] = pt(-0.6, -0.6), [bx, by] = pt(cols - 0.4, -0.6), [cx, cy] = pt(cols - 0.4, rows - 0.4), [dx, dy] = pt(-0.6, rows - 0.4);
-  let svg = `<polygon points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="#8f8b84"/>`;
-  for (const t of tiles) {
-    const [x, y] = pt(t.c, t.r);
-    const b = t.b, tw = w * 0.8, th = h * 0.8;
-    svg += `<polygon points="${x},${y - h} ${x + w},${y} ${x},${y + h} ${x - w},${y}" fill="${b ? "#cfc6b6" : "#7cbf6a"}" stroke="#ffffff55"/>`;
-    if (!b) {
-      for (const [ox, oy] of [[-12, -2], [10, 2], [0, 8]])
-        svg += `<rect x="${x + ox - 1.5}" y="${y + oy - 10}" width="3" height="10" fill="#6b4a2b"/><circle cx="${x + ox}" cy="${y + oy - 14}" r="8" fill="#3f9a4a"/>`;
-      continue;
+
+  let defs = `<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="sun" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="${night ? "#fef9c3" : "#fff7ed"}" stop-opacity=".95"/>
+      <stop offset=".35" stop-color="${night ? "#fde68a" : "#fde68a"}" stop-opacity=".55"/><stop offset="1" stop-color="#fde68a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="slabTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${night ? "#334155" : "#e2e8f0"}"/>
+      <stop offset="1" stop-color="${night ? "#1e293b" : "#cbd5e1"}"/></linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#16a34a"/></linearGradient>
+    <linearGradient id="crane" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde047"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
+    <pattern id="sc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.6" height="6" fill="#f59e0b"/></pattern>`;
+  let sky = "";
+  // sun or moon with a soft halo, stars at night, drifting clouds by day
+  sky += `<circle cx="70" cy="62" r="60" fill="url(#sun)"/><circle cx="70" cy="62" r="${night ? 13 : 16}" fill="${night ? "#fef3c7" : "#fff7ed"}"/>`;
+  if (night) {
+    sky += `<circle cx="76" cy="57" r="11" fill="#1e1b4b" opacity=".9"/>`;
+    for (let i = 0; i < 46; i++) {
+      const x = rnd(i) * W, y = rnd(i + 50) * (y0 - 40), r = rnd(i + 99) * 1.3 + .3;
+      sky += `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity="${.35 + rnd(i + 7) * .6}">
+        <animate attributeName="opacity" values=".2;1;.2" dur="${3 + rnd(i) * 4}s" repeatCount="indefinite"/></circle>`;
     }
-    let g = "";
-    const c = COLORS[b.key] || "#999";
-    let labelY = y - 22;
+  } else {
+    for (const [cx, cy, s, d] of [[300, 54, 1, 38], [190, 98, .7, 52], [350, 140, .55, 44]])
+      sky += `<g opacity=".75"><g><ellipse cx="${cx}" cy="${cy}" rx="${34 * s}" ry="${11 * s}" fill="#fff"/>
+        <ellipse cx="${cx - 12 * s}" cy="${cy - 7 * s}" rx="${16 * s}" ry="${11 * s}" fill="#fff"/>
+        <ellipse cx="${cx + 10 * s}" cy="${cy - 9 * s}" rx="${14 * s}" ry="${12 * s}" fill="#fff"/>
+        <animateTransform attributeName="transform" type="translate" values="0 0;-26 0;0 0" dur="${d}s" repeatCount="indefinite"/></g></g>`;
+  }
+
+  // the floating slab
+  const [ax, ay] = pt(-0.65, -0.65), [bx, by] = pt(cols - 0.35, -0.65), [cx, cy] = pt(cols - 0.35, rows - 0.35), [dx, dy] = pt(-0.65, rows - 0.35);
+  const T = 14;
+  let city = `<ellipse cx="${x0}" cy="${cy + T + 14}" rx="${w * 3.2}" ry="16" fill="#000" opacity=".22" filter="url(#soft)"/>
+    <polygon points="${dx},${dy} ${cx},${cy} ${cx},${cy + T} ${dx},${dy + T}" fill="${night ? "#0f172a" : "#94a3b8"}"/>
+    <polygon points="${cx},${cy} ${bx},${by} ${bx},${by + T} ${cx},${cy + T}" fill="${night ? "#1e293b" : "#a8b5c7"}"/>
+    <polygon points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="url(#slabTop)"/>`;
+  // road lanes along the grid
+  for (let r = 0; r <= rows; r++) {
+    const [p1x, p1y] = pt(-0.5, r - 0.5), [p2x, p2y] = pt(cols - 0.5, r - 0.5);
+    city += `<line x1="${p1x}" y1="${p1y}" x2="${p2x}" y2="${p2y}" stroke="${night ? "#475569" : "#f8fafc"}" stroke-width="1.2" stroke-dasharray="5 6" opacity=".8"/>`;
+  }
+  for (let c = 0; c <= cols; c++) {
+    const [p1x, p1y] = pt(c - 0.5, -0.5), [p2x, p2y] = pt(c - 0.5, rows - 0.5);
+    city += `<line x1="${p1x}" y1="${p1y}" x2="${p2x}" y2="${p2y}" stroke="${night ? "#475569" : "#f8fafc"}" stroke-width="1.2" stroke-dasharray="5 6" opacity=".8"/>`;
+  }
+
+  tiles.forEach((t, idx) => {
+    const [x, y] = pt(t.c, t.r);
+    const b = t.b, tw = w * 0.78, th = h * 0.78;
+    const lot = (k) => `${x},${y - h * k} ${x + w * k},${y} ${x},${y + h * k} ${x - w * k},${y}`;
+    if (!b) {   // a little park
+      city += `<polygon points="${lot(.86)}" fill="url(#grass)" opacity=".95"/>`;
+      for (const [ox, oy, s] of [[-14, -3, 1], [12, 1, .85], [0, 9, .95]]) {
+        city += `<ellipse cx="${x + ox + 4}" cy="${y + oy + 1}" rx="${8 * s}" ry="${3.5 * s}" fill="#000" opacity=".18"/>
+          <rect x="${x + ox - 1.3}" y="${y + oy - 9 * s}" width="2.6" height="${9 * s}" rx="1" fill="#7c4a1e"/>
+          <circle cx="${x + ox}" cy="${y + oy - 14 * s}" r="${8.5 * s}" fill="#15803d"/>
+          <circle cx="${x + ox - 2.5 * s}" cy="${y + oy - 16 * s}" r="${5 * s}" fill="#4ade80" opacity=".8"/>`;
+      }
+      return;
+    }
+    const c = COLORS[b.key] || "#94a3b8", id = b.key;
+    defs += `<linearGradient id="L${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, .92)}"/><stop offset="1" stop-color="${shade(c, .62)}"/></linearGradient>
+      <linearGradient id="R${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, 1.12)}"/><stop offset="1" stop-color="${shade(c, .82)}"/></linearGradient>
+      <linearGradient id="T${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${shade(c, 1.35)}"/><stop offset="1" stop-color="${shade(c, 1.08)}"/></linearGradient>`;
+    let g = `<polygon points="${lot(.9)}" fill="${night ? "#273449" : "#f1f5f9"}" opacity=".9"/>`;
+    let labelY;
     if (b.floors === 0) {
-      g += `<polygon points="${x},${y - th} ${x + tw},${y} ${x},${y + th} ${x - tw},${y}" fill="#a47d55" stroke="#7a5a3a" stroke-dasharray="3 2"/>
-        <text x="${x}" y="${y + 5}" font-size="16" text-anchor="middle">🚧</text>`;
+      // blueprint of the future building
+      const H = 34;
+      g += `<g stroke="#38bdf8" stroke-width="1.2" fill="rgba(56,189,248,.10)" stroke-dasharray="4 3" filter="url(#glow)">
+        <polygon points="${x - tw},${y} ${x},${y + th} ${x},${y + th - H} ${x - tw},${y - H}"/>
+        <polygon points="${x},${y + th} ${x + tw},${y} ${x + tw},${y - H} ${x},${y + th - H}"/>
+        <polygon points="${x},${y - th - H} ${x + tw},${y - H} ${x},${y + th - H} ${x - tw},${y - H}"/>
+        <animate attributeName="stroke-dashoffset" values="0;14" dur="1.6s" repeatCount="indefinite"/></g>`;
+      labelY = y - H - th - 12;
     } else {
-      const n = Math.min(b.floors, 40), H = 10 + n * fh;
-      g += `<polygon points="${x - tw},${y} ${x},${y + th} ${x},${y + th - H} ${x - tw},${y - H}" fill="${shade(c, 0.78)}"/>
-        <polygon points="${x},${y + th} ${x + tw},${y} ${x + tw},${y - H} ${x},${y + th - H}" fill="${shade(c, 0.95)}"/>`;
-      if (fh >= 6) for (let i = 0; i < n; i++) {
-        const yy = y - 10 - i * fh + 2;
-        for (const k of [0.25, 0.6]) {
+      const n = Math.min(b.floors, 40), H = 8 + n * fh;
+      g += `<ellipse cx="${x + 18}" cy="${y + 8}" rx="${tw + 10}" ry="${th}" fill="#000" opacity="${night ? .35 : .2}" filter="url(#soft)"/>`;
+      if (b.overdue) g += `<polygon points="${lot(.95)}" fill="none" stroke="#f59e0b" stroke-width="2.4" filter="url(#glow)">
+        <animate attributeName="opacity" values=".25;1;.25" dur="1.6s" repeatCount="indefinite"/></polygon>`;
+      g += `<polygon points="${x - tw},${y} ${x},${y + th} ${x},${y + th - H} ${x - tw},${y - H}" fill="url(#L${id})"/>
+        <polygon points="${x},${y + th} ${x + tw},${y} ${x + tw},${y - H} ${x},${y + th - H}" fill="url(#R${id})"/>`;
+      // windows: glass by day, warm lights by night
+      if (fh >= 5) for (let i = 0; i < n; i++) {
+        const yy = y - 8 - i * fh + 1.5;
+        for (const [k, j] of [[0.2, 0], [0.55, 1]]) {
+          const on = !night || rnd(idx * 97 + i * 7 + j) > .3;
+          const col = night ? (on ? "#fde68a" : "#1e293b") : "#e0f2fe";
+          const op = night ? (on ? .95 : .7) : .75;
           const lx = x - tw + tw * k, ly = yy + th * k;
-          g += `<polygon points="${lx},${ly} ${lx + 7},${ly + 3.5} ${lx + 7},${ly - 1.5} ${lx},${ly - 5}" fill="#fff6c9" opacity=".85"/>`;
-          const rx = x + tw * k - 7, ry = yy + th - th * k;
-          g += `<polygon points="${rx},${ry} ${rx + 7},${ry - 3.5} ${rx + 7},${ry - 8.5} ${rx},${ry - 5}" fill="#fff6c9" opacity=".7"/>`;
+          g += `<polygon points="${lx},${ly} ${lx + 8},${ly + 4} ${lx + 8},${ly - fh * .45 + 4} ${lx},${ly - fh * .45}" fill="${col}" opacity="${op}" ${night && on ? 'filter="url(#glow)"' : ""}/>`;
+          const on2 = !night || rnd(idx * 53 + i * 11 + j) > .35;
+          const rx = x + tw * k - 1, ry = yy + th - th * k;
+          g += `<polygon points="${rx},${ry} ${rx + 8},${ry - 4} ${rx + 8},${ry - 4 - fh * .45} ${rx},${ry - fh * .45}" fill="${night ? (on2 ? "#fcd34d" : "#1e293b") : "#bae6fd"}" opacity="${night ? (on2 ? .85 : .7) : .55}"/>`;
         }
       }
-      g += `<polygon points="${x},${y - th - H} ${x + tw},${y - H} ${x},${y + th - H} ${x - tw},${y - H}" fill="${shade(c, 1.15)}"/>`;
+      // glossy edge and roof
+      g += `<line x1="${x}" y1="${y + th}" x2="${x}" y2="${y + th - H}" stroke="rgba(255,255,255,.35)" stroke-width="1"/>
+        <polygon points="${x},${y - th - H} ${x + tw},${y - H} ${x},${y + th - H} ${x - tw},${y - H}" fill="url(#T${id})" stroke="rgba(255,255,255,.55)" stroke-width="1"/>
+        <polygon points="${x},${y - th * .55 - H} ${x + tw * .55},${y - H} ${x},${y + th * .55 - H} ${x - tw * .55},${y - H}" fill="rgba(255,255,255,.18)"/>`;
       if (b.overdue)
-        g += `<polygon points="${x - tw - 3},${y + 2} ${x},${y + th + 3} ${x},${y + th - H + 8} ${x - tw - 3},${y - H + 8}" fill="url(#sc)" opacity=".9"/>`;
-      labelY = y - H - th - 10;
-      if (b.open && !b.overdue) {
-        const mx = x + tw * 0.55, my = y - H + 2;
-        g += `<line x1="${mx}" y1="${my}" x2="${mx}" y2="${my - 46}" stroke="#f2b632" stroke-width="3"/>
-          <line x1="${mx - 34}" y1="${my - 44}" x2="${mx + 12}" y2="${my - 44}" stroke="#f2b632" stroke-width="3"/>
-          <line x1="${mx - 28}" y1="${my - 44}" x2="${mx - 28}" y2="${my - 24}" stroke="#333" stroke-width="1"/>
-          <rect x="${mx - 32}" y="${my - 25}" width="8" height="5" fill="#666"/>`;
+        g += `<polygon points="${x - tw - 3},${y + 2} ${x},${y + th + 3} ${x},${y + th - H + 6} ${x - tw - 3},${y - H + 6}" fill="url(#sc)" opacity=".85"/>`;
+      const roof = y - H;
+      if (n >= 7) g += `<line x1="${x}" y1="${roof}" x2="${x}" y2="${roof - 22}" stroke="${night ? "#cbd5e1" : "#475569"}" stroke-width="1.4"/>
+        <circle cx="${x}" cy="${roof - 23}" r="2.2" fill="#ef4444" filter="url(#glow)"><animate attributeName="opacity" values="1;.15;1" dur="1.4s" repeatCount="indefinite"/></circle>`;
+      labelY = roof - th - (n >= 7 ? 34 : 14);
+      if (b.open && !b.overdue) {   // a crane that slowly swings
+        const mx = x + tw * 0.5, my = roof + 1;
+        g += `<line x1="${mx}" y1="${my}" x2="${mx}" y2="${my - 48}" stroke="url(#crane)" stroke-width="3" stroke-linecap="round"/>
+          <g><line x1="${mx - 36}" y1="${my - 46}" x2="${mx + 12}" y2="${my - 46}" stroke="url(#crane)" stroke-width="3" stroke-linecap="round"/>
+          <line x1="${mx - 30}" y1="${my - 46}" x2="${mx - 30}" y2="${my - 26}" stroke="${night ? "#e2e8f0" : "#334155"}" stroke-width="1"/>
+          <rect x="${mx - 34}" y="${my - 27}" width="8" height="6" rx="1.5" fill="${night ? "#94a3b8" : "#475569"}"/>
+          <animateTransform attributeName="transform" type="rotate" values="-5 ${mx} ${my - 46};5 ${mx} ${my - 46};-5 ${mx} ${my - 46}" dur="7s" repeatCount="indefinite"/></g>`;
+        labelY = Math.min(labelY, my - 60);
       }
     }
-    if (b.overdue) g += `<text x="${x - tw + 2}" y="${y + th + 12}" font-size="12">🚧</text>`;
-    const star = b.priority ? "⭐" : "";
-    g += `<g transform="translate(${x},${labelY})"><rect x="-22" y="-12" width="44" height="16" rx="8" fill="#1d1b18cc"/>
-      <text x="0" y="0" font-size="10" fill="#fff" text-anchor="middle">${b.emoji}${b.floors ? " " + fa(b.floors) : ""}${star}</text></g>`;
-    svg += `<g class="bld" data-b="${b.key}">${g}</g>`;
-  }
-  $("sky").innerHTML = `<svg viewBox="0 ${Math.max(0, y0 - top)} ${W} ${H_}" xmlns="http://www.w3.org/2000/svg">
-    <defs><pattern id="sc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-    <rect width="2" height="6" fill="#b07d2b"/></pattern></defs>${svg}</svg>`;
-  document.querySelectorAll("#sky g.bld").forEach((el) => el.onclick = () => openBuilding(el.dataset.b));
+    // a glass label with the building, its floors and a priority dot
+    const txt = `${b.emoji}${b.floors ? " " + fa(b.floors) : ""}`;
+    const lw = 26 + (b.floors ? String(b.floors).length * 7 : 0) + (b.priority ? 8 : 0) + (b.overdue ? 12 : 0);
+    g += `<g transform="translate(${x},${labelY})">
+      <rect x="${-lw / 2}" y="-13" width="${lw}" height="19" rx="9.5" fill="${night ? "rgba(15,23,42,.6)" : "rgba(255,255,255,.75)"}" stroke="${night ? "rgba(255,255,255,.25)" : "rgba(255,255,255,.95)"}"/>
+      <text x="${b.priority ? 3 : 0}" y="1" font-size="10.5" font-weight="700" fill="${night ? "#fff" : "#0f172a"}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${b.overdue ? "⚠️" : ""}${txt}</text>
+      ${b.priority ? `<circle cx="${lw / 2 - 7}" cy="-3.5" r="3" fill="#fbbf24" stroke="#fff" stroke-width="1"/>` : ""}</g>`;
+    city += `<g class="bld" data-b="${b.key}">${g}</g>`;
+  });
+
+  $("hero").className = "hero" + (night ? " night" : "");
+  $("hero").innerHTML = `<span class="chip-time">${night ? "🌙 شب شهر" : "☀️ روز شهر"}</span>
+    <svg viewBox="0 0 ${W} ${Hsvg}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${sky}${city}</svg>`;
+  document.querySelectorAll("#hero g.bld").forEach((el) => el.onclick = () => openBuilding(el.dataset.b));
 }
 
+/* ---------- stage card ---------- */
 function stageOf(n) {
   const i = STAGES.findLastIndex(([m]) => n >= m);
   return { i, name: STAGES[i][1], next: STAGES[i + 1] };
 }
 
 function stageArt(b) {
-  const c = COLORS[b.key] || "#999", d = shade(c, 0.75), n = b.floors;
-  let s = `<rect y="88" width="160" height="20" fill="#9bc27a"/>`;
-  if (n === 0) s += `<rect x="40" y="78" width="80" height="12" fill="#a47d55"/><rect x="50" y="62" width="4" height="18" fill="#f28c28"/>
-    <rect x="104" y="62" width="4" height="18" fill="#f28c28"/><text x="80" y="62" font-size="20" text-anchor="middle">🚧</text>`;
-  else if (n < 3) s += `<rect x="50" y="64" width="60" height="26" fill="${c}"/><rect x="50" y="64" width="60" height="5" fill="${d}"/>
-    <line x1="120" y1="90" x2="120" y2="20" stroke="#f2b632" stroke-width="4"/><line x1="70" y1="22" x2="132" y2="22" stroke="#f2b632" stroke-width="4"/>`;
-  else if (n < 7) s += `<polygon points="45,55 80,30 115,55" fill="${d}"/><rect x="50" y="55" width="60" height="35" fill="${c}"/>
-    <rect x="60" y="62" width="12" height="10" fill="#fff6c9"/><rect x="88" y="62" width="12" height="10" fill="#fff6c9"/><rect x="74" y="74" width="12" height="16" fill="${d}"/>`;
-  else if (n < 13) { s += `<rect x="52" y="22" width="56" height="68" fill="${c}"/><rect x="52" y="18" width="56" height="6" fill="${d}"/>`;
-    for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) s += `<rect x="${58 + k * 17}" y="${28 + r * 12}" width="10" height="7" fill="#fff6c9"/>`; }
-  else { s += `<rect x="60" y="6" width="40" height="84" fill="${c}"/><rect x="68" y="0" width="24" height="8" fill="${d}"/>
-    <rect x="38" y="44" width="22" height="46" fill="${d}"/><rect x="100" y="54" width="22" height="36" fill="${d}"/>`;
-    for (let r = 0; r < 7; r++) for (let k = 0; k < 2; k++) s += `<rect x="${66 + k * 16}" y="${14 + r * 11}" width="10" height="6" fill="#fff6c9"/>`; }
-  if (b.overdue) s += `<rect x="30" y="10" width="100" height="80" fill="url(#hatch)" opacity=".55"/>`;
-  return `<svg viewBox="0 0 160 108" width="100%" height="81" preserveAspectRatio="xMidYMax meet"><defs><pattern id="hatch" width="8" height="8"
-    patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="#b07d2b"/></pattern></defs>${s}</svg>`;
+  const c = COLORS[b.key] || "#94a3b8", d = shade(c, .72), l = shade(c, 1.15), n = b.floors;
+  let s = `<defs><linearGradient id="sa" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${l}"/><stop offset="1" stop-color="${d}"/></linearGradient>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.5" height="8" fill="#f59e0b"/></pattern></defs>
+    <ellipse cx="80" cy="96" rx="64" ry="10" fill="#22c55e" opacity=".85"/>`;
+  if (n === 0) s += `<g stroke="#0ea5e9" stroke-width="2" fill="rgba(14,165,233,.12)" stroke-dasharray="5 4"><rect x="50" y="40" width="60" height="52" rx="4"/></g>
+    <text x="80" y="72" font-size="18" text-anchor="middle">📐</text>`;
+  else if (n < 3) s += `<rect x="48" y="66" width="64" height="26" rx="4" fill="url(#sa)"/>
+    <line x1="122" y1="92" x2="122" y2="20" stroke="#f59e0b" stroke-width="4" stroke-linecap="round"/><line x1="70" y1="22" x2="134" y2="22" stroke="#f59e0b" stroke-width="4" stroke-linecap="round"/>`;
+  else if (n < 7) s += `<polygon points="44,58 80,32 116,58" fill="${d}"/><rect x="50" y="56" width="60" height="36" rx="3" fill="url(#sa)"/>
+    <rect x="60" y="64" width="13" height="10" rx="2" fill="#e0f2fe"/><rect x="87" y="64" width="13" height="10" rx="2" fill="#e0f2fe"/><rect x="74" y="76" width="12" height="16" rx="2" fill="${d}"/>`;
+  else if (n < 13) { s += `<rect x="52" y="20" width="56" height="72" rx="5" fill="url(#sa)"/>`;
+    for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) s += `<rect x="${58 + k * 17}" y="${28 + r * 12}" width="11" height="7" rx="1.5" fill="#e0f2fe" opacity=".9"/>`; }
+  else { s += `<rect x="38" y="46" width="24" height="46" rx="4" fill="${d}"/><rect x="98" y="56" width="24" height="36" rx="4" fill="${d}"/>
+    <rect x="58" y="8" width="44" height="84" rx="6" fill="url(#sa)"/><line x1="80" y1="8" x2="80" y2="-6" stroke="#475569" stroke-width="2"/>`;
+    for (let r = 0; r < 7; r++) for (let k = 0; k < 2; k++) s += `<rect x="${65 + k * 17}" y="${16 + r * 10.5}" width="12" height="6" rx="1.5" fill="#e0f2fe" opacity=".9"/>`; }
+  if (b.overdue) s += `<rect x="34" y="12" width="92" height="80" fill="url(#hatch)" opacity=".5"/>`;
+  return `<svg viewBox="0 -8 160 116" width="100%" height="84" preserveAspectRatio="xMidYMax meet">${s}</svg>`;
 }
 
 function stageCard(b) {
@@ -298,25 +409,26 @@ function stageCard(b) {
   const pct = st.next ? ((b.floors - STAGES[st.i][0]) / (st.next[0] - STAGES[st.i][0])) * 100 : 100;
   const sub = [st.next ? `${fa(st.next[0] - b.floors)} ✅ تا «${st.next[1]}»` : "به بالاترین مرحله رسیده 🏆",
     `${fa(b.open)} کار باز`];
-  if (b.overdue) sub.push(`🚧 ${fa(b.overdue)} کار عقب‌افتاده`);
+  if (b.overdue) sub.push(`⚠️ ${fa(b.overdue)} کار عقب‌افتاده`);
   return `<div class="stage"><div class="art">${stageArt(b)}</div><div class="info">
-    <div class="lvl">${st.name}، ${floors(b.floors)}</div><div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="lvl">${st.name}، ${floors(b.floors)}</div><div class="bar"><i style="width:${Math.max(pct, 4)}%"></i></div>
     <div class="sub">${sub.join("<br>")}</div></div></div>`;
 }
 
+/* ---------- task cards ---------- */
 function card(t, opts = {}) {
   const b = bmap()[t.building];
   const meta = [];
-  if (!opts.noBuilding) meta.push(b.emoji + " " + esc(b.name));
-  if (t.overdue) meta.push("⏰ عقب‌افتاده");
-  else if (t.due_date && t.due_date !== S.date) meta.push("📅 " + fa(t.due_date.slice(5)));
-  if (t.due_time) meta.push("🕒 " + fa(t.due_time));
-  if (t.staff) meta.push("👥 پرسنل");
-  if (t.board === "waiting") meta.push("⏳ در انتظار");
-  if (t.script) meta.push("📝 سناریو داره");
-  return `<div class="card ${t.overdue ? "late" : ""}" data-id="${t.id}">
+  if (!opts.noBuilding) meta.push(`<span>${b.emoji} ${esc(b.name)}</span>`);
+  if (t.overdue) meta.push(`<span class="late">⏰ عقب‌افتاده</span>`);
+  else if (t.due_date && t.due_date !== S.date) meta.push(`<span>📅 ${fa(t.due_date.slice(5))}</span>`);
+  if (t.due_time) meta.push(`<span>🕒 ${fa(t.due_time)}</span>`);
+  if (t.staff) meta.push(`<span>👥 پرسنل</span>`);
+  if (t.board === "waiting") meta.push(`<span>⏳ در انتظار</span>`);
+  if (t.script) meta.push(`<span>📝 سناریو</span>`);
+  return `<div class="card" data-id="${t.id}" style="--bc:${t.overdue ? "var(--danger)" : COLORS[t.building] || "var(--accent)"}">
     <div class="t">${esc(t.title)}</div>
-    ${meta.length ? `<div class="meta">${meta.join("<span>•</span>")}</div>` : ""}
+    ${meta.length ? `<div class="meta">${meta.join("")}</div>` : ""}
     <div class="acts">
       <button class="b main" data-a="done">✅ انجام شد</button>
       <button class="b" data-a="later">⏰ بعداً</button>
@@ -334,22 +446,24 @@ function bindCards(root) {
 function drawToday() {
   const items = S.today;
   $("today").innerHTML = `<h2>📌 کارهای امروز (${fa(items.length)})</h2>` +
-    (items.length ? items.map((t) => card(t)).join("") : '<div class="empty">امروز کاری نمونده 🎉<br>یه ساختمون رو توی شهر انتخاب کن و قدم بعدیش رو بردار.</div>') +
+    (items.length ? items.map((t) => card(t)).join("")
+      : '<div class="empty"><b>🎉</b>امروز کاری نمونده.<br>یه ساختمون رو توی شهر انتخاب کن و قدم بعدیش رو بردار.</div>') +
     `<div class="legend">${fa(esc(S.streak_line))}${S.buffer_line ? "<br>" + fa(esc(S.buffer_line)) : ""}</div>`;
   bindCards($("today"));
 }
 
 function openBuilding(key) {
   const b = bmap()[key];
+  if (tg) tg.HapticFeedback.selectionChanged();
   sheet(`<h3>${b.emoji} ${esc(b.name)}</h3>` + stageCard(b) +
     (b.tasks.length ? b.tasks.map((t) => card(t, { noBuilding: true })).join("")
       : '<div class="empty">این ساختمون فعلاً کار بازی نداره.</div>') +
-    `<button class="b wide" id="add-here">➕ کار جدید برای ${esc(b.name)}</button>`);
+    `<button class="b wide" id="add-here">＋ کار جدید برای ${esc(b.name)}</button>`);
   bindCards($("sheet"));
   $("add-here").onclick = () => { closeSheet(); pick.building = key; drawChips(); show("add"); $("text").focus(); };
 }
 
-function sheet(html) { $("sheet").innerHTML = html; $("sheet").classList.add("on"); $("sheet-bg").classList.add("on"); }
+function sheet(html) { $("sheet").innerHTML = html; $("sheet").scrollTop = 0; $("sheet").classList.add("on"); $("sheet-bg").classList.add("on"); }
 function closeSheet() { $("sheet").classList.remove("on"); $("sheet-bg").classList.remove("on"); }
 $("sheet-bg").onclick = closeSheet;
 
