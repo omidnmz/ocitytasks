@@ -112,8 +112,12 @@ pytest
 
 Set `WEBAPP_URL` and the bot also serves a graphical city inside Telegram: towers per building,
 scaffolding on overdue work, today's tasks with one-tap done, snooze, staff and delete, and a
-new-task form. The Buildings tab lists every building with its stage; there you can rename a
-building, change its emoji, star it as a priority, or add a new one. Setup on a Windows server:
+new-task form. The city is split into districts: downtown (today's income: Crocs Management,
+technician work, the trade bot), the tech park (SmartO and its products Retail OS, Technician OS and
+Fitness OS), support (Media Hub, marketing, course knowledge), the central square, personal life and
+future lots for ideas. Tap a district or pinch to zoom; glowing skybridges show which buildings serve
+each other. Running businesses start with the floors they already have. The Buildings tab lists every
+building by district; there you can rename it, change its emoji or district, star it, or add a new one. Setup on a Windows server:
 `docs/mini-app.md`.
 
 ## Not in this version yet

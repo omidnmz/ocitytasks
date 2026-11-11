@@ -126,7 +126,7 @@ def make_app(city: CityHall, token: str, owner_id) -> web.Application:
         name = str(body.get("name", "")).strip()
         if not name:
             return web.json_response({"error": "empty"}, status=400)
-        key = city.add_building(name, str(body.get("emoji") or "🏢"))
+        key = city.add_building(name, str(body.get("emoji") or "🏢"), str(body.get("district") or "tech"))
         if body.get("priority"):
             city.update_building(key, priority=True)
         b = BUILDINGS[key]
@@ -139,7 +139,8 @@ def make_app(city: CityHall, token: str, owner_id) -> web.Application:
         body = await request.json()
         priority = body.get("priority")
         city.update_building(key, name=str(body.get("name") or ""), emoji=str(body.get("emoji") or ""),
-                             priority=bool(priority) if priority is not None else None)
+                             priority=bool(priority) if priority is not None else None,
+                             district=body.get("district"))
         return web.json_response({"ok": True, "message": "✏️ ذخیره شد"})
 
     app = web.Application(middlewares=[auth])

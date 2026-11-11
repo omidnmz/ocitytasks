@@ -11,21 +11,36 @@ class Building:
     name: str
     emoji: str
     bridges: tuple[str, ...] = ()
+    district: str = "tech"
+    base: int = 0  # floors it already had before OCity started counting (a running business is not an empty lot)
 
+
+# The city's districts, in the order the Mini App lists them.
+DISTRICTS: dict[str, tuple[str, str, str]] = {  # key -> (name, emoji, what lives there)
+    "downtown": ("مرکز شهر", "💰", "درآمد امروز: کارهایی که همین الان پول می‌سازن"),
+    "tech": ("شهرک فناوری", "🚀", "درآمد فردا: SmartO و محصولاتش"),
+    "support": ("منطقه پشتیبانی", "🛠", "به بقیه ساختمون‌ها خدمت می‌دن"),
+    "center": ("میدون مرکزی", "🏛", "شهرداری، وصل به همه"),
+    "personal": ("محله شخصی", "🏡", "زندگی، سلامتی، خانواده"),
+    "future": ("زمین‌های آینده", "🌱", "ایده‌ها، تا وقتی فعال بشن"),
+}
 
 BUILDINGS: dict[str, Building] = {
     b.key: b
     for b in [
-        Building("cityhall", "شهرداری", "🏛", ("retail", "media", "smarto", "marketing")),
-        Building("retail", "Retail OS / کراکس", "👟", ("media", "smarto", "marketing")),
-        Building("media", "Media Hub", "🎬", ("marketing", "retail", "smarto", "fitness")),
-        Building("marketing", "برج مارکتینگ", "📣", ("media", "smarto", "fitness", "retail")),
-        Building("smarto", "SmartO", "🤖", ("marketing", "media", "technician")),
-        Building("technician", "تکنسینی", "🦷", ("smarto",)),
-        Building("fitness", "Fitness OS", "💪", ("marketing", "media")),
-        Building("tradebot", "ترید بات", "📈", ()),
-        Building("personal", "زندگی شخصی", "🏠", ()),
-        Building("vault", "گنجینه ایده‌ها", "💡", ()),
+        Building("cityhall", "شهرداری", "🏛", ("retail", "media", "smarto", "marketing"), "center"),
+        Building("retail", "کراکس منیجمنت", "👟", ("retailos", "media", "marketing"), "downtown", 10),
+        Building("technician", "کار تکنسینی", "🦷", ("techos", "knowledge"), "downtown", 4),
+        Building("tradebot", "ترید بات", "📈", (), "downtown", 3),
+        Building("smarto", "SmartO", "🤖", ("retailos", "techos", "fitness", "marketing", "media"), "tech"),
+        Building("retailos", "Retail OS", "🛒", ("smarto", "retail"), "tech"),
+        Building("techos", "Technician OS", "🔧", ("smarto", "technician", "knowledge"), "tech"),
+        Building("fitness", "Fitness OS", "💪", ("smarto", "marketing", "media"), "tech"),
+        Building("media", "Media Hub", "🎬", ("marketing", "retail", "smarto", "fitness"), "support"),
+        Building("marketing", "برج مارکتینگ", "📣", ("media", "smarto", "fitness", "retail"), "support"),
+        Building("knowledge", "دانش دوره‌ها", "📚", ("technician", "techos"), "support"),
+        Building("personal", "زندگی شخصی", "🏠", (), "personal"),
+        Building("vault", "گنجینه ایده‌ها", "💡", (), "future"),
     ]
 }
 
@@ -41,7 +56,8 @@ def configure(settings: dict[str, dict]) -> None:
         base = BUILDINGS.get(key)
         name = (s.get("name") or (base.name if base else key)).strip()
         emoji = (s.get("emoji") or (base.emoji if base else "🏢")).strip()
-        BUILDINGS[key] = Building(key, name, emoji, base.bridges if base else ())
+        district = s.get("district") if s.get("district") in DISTRICTS else (base.district if base else "tech")
+        BUILDINGS[key] = Building(key, name, emoji, base.bridges if base else (), district, base.base if base else 0)
 
 
 def label(key: str) -> str:

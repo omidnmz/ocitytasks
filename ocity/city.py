@@ -14,7 +14,8 @@ from datetime import date, datetime, time, timedelta
 
 from . import capture, learning
 from .ai import AI, ContentItem
-from .buildings import BUILDINGS, CONTENT_SPRINT_STEPS, DEFAULT_BUILDINGS, STARTER_TASKS, configure, label
+from .buildings import (BUILDINGS, CONTENT_SPRINT_STEPS, DEFAULT_BUILDINGS, DISTRICTS, STARTER_TASKS, configure,
+                        label)
 from .config import Config
 from .db import DB, Task, parse_iso
 
@@ -97,6 +98,7 @@ class CityHall:
         self.ai = ai
         self.tz = cfg.timezone
         self.load_buildings()
+        self.move_into_districts()
 
     # --- the Mayor's own building settings --------------------------------
     def building_settings(self) -> dict[str, dict]:
@@ -108,8 +110,25 @@ class CityHall:
         if stored is not None:
             self.cfg.building_priority = [k for k in json.loads(stored) if k in BUILDINGS]
 
+    def floors(self) -> dict[str, int]:
+        """Height of every building: what it already had, plus one floor per finished task."""
+        done = self.db.floors_by_building()
+        return {key: b.base + done.get(key, 0) for key, b in BUILDINGS.items()}
+
+    def move_into_districts(self) -> None:
+        """Once: open tasks that belong to the new product buildings move there (Retail OS, Technician OS, courses)."""
+        if self.db.get_state("districts_v1"):
+            return
+        sources = {"retailos": ("retail", "smarto"), "techos": ("technician", "smarto"), "knowledge": ("technician",)}
+        for t in self.db.open_tasks():
+            target = capture.guess_building(t.title)
+            if target in sources and t.building in sources[target]:
+                self.db.update_task(t.id, building=target)
+                log.info("Moved task %s to %s", t.id, target)
+        self.db.set_state("districts_v1", "1")
+
     def update_building(self, key: str, name: str | None = None, emoji: str | None = None,
-                        priority: bool | None = None) -> None:
+                        priority: bool | None = None, district: str | None = None) -> None:
         if key not in BUILDINGS:
             raise KeyError(key)
         settings = self.building_settings()
@@ -118,6 +137,8 @@ class CityHall:
             entry["name"] = name.strip()[:30]
         if emoji and clean_emoji(emoji):
             entry["emoji"] = clean_emoji(emoji)
+        if district in DISTRICTS:
+            entry["district"] = district
         self.db.set_state("buildings", json.dumps(settings, ensure_ascii=False))
         if priority is not None:
             order = [k for k in self.cfg.building_priority if k != key]
@@ -127,13 +148,14 @@ class CityHall:
             self.db.set_state("building_priority", json.dumps(order))
         self.load_buildings()
 
-    def add_building(self, name: str, emoji: str = "🏢") -> str:
+    def add_building(self, name: str, emoji: str = "🏢", district: str = "tech") -> str:
         settings = self.building_settings()
         n = 1
         while f"c{n}" in BUILDINGS or f"c{n}" in settings:
             n += 1
         key = f"c{n}"
-        settings[key] = {"name": name.strip()[:30] or "ساختمون جدید", "emoji": clean_emoji(emoji) or "🏢", "custom": True}
+        settings[key] = {"name": name.strip()[:30] or "ساختمون جدید", "emoji": clean_emoji(emoji) or "🏢",
+                         "district": district if district in DISTRICTS else "tech", "custom": True}
         self.db.set_state("buildings", json.dumps(settings, ensure_ascii=False))
         self.load_buildings()
         return key
@@ -736,7 +758,7 @@ class CityHall:
 
     # --- views -----------------------------------------------------------
     def city_view(self, now: datetime) -> str:
-        floors = self.db.floors_by_building()
+        floors = self.floors()
         today = self.local(now).date().isoformat()
         open_ = self.db.open_tasks()
         lines = ["🏙 شهر تو امروز:", ""]
@@ -888,7 +910,8 @@ class CityHall:
     def city_state(self, now: datetime) -> dict:
         """Everything the Mini App draws: the buildings, today's work, the streak."""
         today = self.local(now).date().isoformat()
-        floors = self.db.floors_by_building()
+        floors = self.floors()
+        built = self.db.floors_by_building()
         open_ = self.db.open_tasks()
 
         def task_json(t: Task) -> dict:
@@ -909,6 +932,8 @@ class CityHall:
                                      t.due_date or "9999", t.id))
             buildings.append({
                 "key": key, "name": b.name, "emoji": b.emoji, "floors": floors.get(key, 0),
+                "built": built.get(key, 0), "base": b.base, "district": b.district,
+                "bridges": [k for k in b.bridges if k in BUILDINGS],
                 "open": len(mine), "overdue": sum(1 for t in mine if task_json(t)["overdue"]),
                 "priority": key in self.cfg.building_priority,
                 "custom": key not in DEFAULT_BUILDINGS,
@@ -918,6 +943,8 @@ class CityHall:
         return {
             "today": [task_json(t) for t in self.today_tasks(now)],
             "buildings": buildings,
+            "districts": [{"key": k, "name": n, "emoji": e, "about": a} for k, (n, e, a) in DISTRICTS.items()],
+            "built": sum(built.get(k, 0) for k in BUILDINGS),
             "streak": self.streak(now),
             "streak_line": self.streak_line(now),
             "buffer": self.content_buffer(now) if has_content else None,
