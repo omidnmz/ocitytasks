@@ -26,7 +26,7 @@ from telegram.ext import (
 )
 
 from . import config as config_mod
-from . import learning
+from . import learning, pipeline
 from .ai import make_ai
 from .buildings import BUILDINGS, label
 from .capture import guess_building
@@ -52,16 +52,15 @@ HELP = """🏛 شهرداری OCity
 /all همه کارهای باز
 /city وضعیت شهر و طبقه‌ها
 /profile چیزهایی که از روال کارت یاد گرفتم
-/plan برنامه محتوا رو بعد از این دستور بفرست (متن یا فایل txt)
+/plan متن آماده برای چت مارکتینگ هر برند، و گرفتن برنامه‌شون
 /script 12 سناریوی کار شماره ۱۲
 /del 12 پاک کردن کار شماره ۱۲
-/sprint شروع دوباره اسپرینت محتوا
 
 چرخه هفتگی محتوا:
-پنجشنبه هندآف هفته بعد رو از Media Hub بگیر و با /plan بفرست.
-روز قبل ضبط پرسنل آماده‌سازی می‌کنن.
-شنبه و سه‌شنبه روز ضبط دسته‌ای با سناریوها.
-بقیه هفته فقط انتشار رو یادآوری می‌کنم.
+جمعه: 📣 برج مارکتینگ برای هر برند برنامه هفته بعد رو می‌گیره (جوابِ چت مارکتینگ رو همینجا بفرست).
+خودم استوری‌ها رو می‌دم به روزها، ریلزها رو می‌برم توی خط تولید Media Hub و بقیه کارها رو بین ساختمون‌ها پخش می‌کنم.
+هر روز صبح استوری‌های اون روز رو از تالار شهر می‌گیری.
+یکشنبه فیلم‌برداری دسته‌ای (شبِ قبلش خبرت می‌کنم)، دوشنبه و سه‌شنبه تدوین، بعد انتشار.
 هدف: همیشه ۳ محتوای آماده‌ی انتشار جلوتر باشیم."""
 
 
@@ -71,7 +70,7 @@ MENU_BUILDINGS = "🏗 ساختمون‌ها"
 MENU_BRIEF = "☀️ گزارش کامل"
 MENU_CITY = "🏙 شهر"
 MENU_ALL = "📋 همه کارها"
-MENU_PLAN = "🎬 برنامه محتوا"
+MENU_PLAN = "📣 برنامه مارکتینگ"
 MENU_PROFILE = "🧠 روال من"
 MENU_HELP = "❓ راهنما"
 MENU_APP = "🏙 باز کردن شهر"
@@ -96,7 +95,7 @@ COMMANDS = [
     BotCommand("buildings", "قدم بعدی ساختمون‌ها"),
     BotCommand("today", "گزارش کامل امروز"),
     BotCommand("all", "همه کارهای باز"),
-    BotCommand("plan", "فرستادن برنامه محتوا"),
+    BotCommand("plan", "برنامه مارکتینگ هفته"),
     BotCommand("city", "وضعیت شهر"),
     BotCommand("profile", "روال کاری من"),
     BotCommand("menu", "نشون دادن منو"),
@@ -188,6 +187,28 @@ def done_keyboard(task_ids: list[int]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
+STAGE_START = {"filming": "🎬 شروع فیلم‌برداری", "editing": "✂️ شروع تدوین"}
+STAGE_WORK = {"filming": "فیلم‌برداری", "editing": "تدوین", "publish": "انتشار"}
+
+
+def start_keyboard(kind: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton(STAGE_START.get(kind, "▶️ شروع"), callback_data=f"f:0:{kind}")]])
+
+
+def focus_keyboard(task_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ گرفتمش", callback_data=f"n:{task_id}"),
+        InlineKeyboardButton("⏭ بعدی", callback_data=f"p:{task_id}"),
+    ]])
+
+
+def time_keyboard(kind: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(label_, callback_data=f"t:0:{kind}:{at.replace(':', '')}")
+        for at, label_ in CityHall.TIME_CHOICES
+    ]])
+
+
 def duration_keyboard(task_id: int) -> InlineKeyboardMarkup:
     options = [15, 30, 45, 60, 90, 120]
     return InlineKeyboardMarkup([
@@ -207,6 +228,7 @@ class Bot:
         self.awaiting_when: int | None = None  # task waiting for a typed reminder time
         self.awaiting_split: int | None = None  # stuck task waiting for its first small step
         self.asking_when: set[int] = set()  # tasks whose building picker should lead to the time question
+        self.focus: dict | None = None  # the filming/editing session: kind, pieces done, pieces skipped
 
     # --- owner -----------------------------------------------------------
     def owner_id(self) -> int | None:
@@ -292,14 +314,16 @@ class Bot:
             await self.plan_prompt(update, ctx)
 
     async def plan_prompt(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if self.is_owner(update):
-            self.awaiting_plan = True
-            await update.message.reply_text(
-                "برنامه محتوا رو همینجا بفرست، یا اگه طولانیه به‌صورت فایل txt. هر محتوا یه خط:\n"
-                "2026-11-05 | کراکس | راهنمای سایز | ریل | کلاسیک مشکی و سفید\n"
-                "(تاریخ | بیزنس | عنوان | فرمت | آماده‌سازی)\n\n"
-                "هر چی زیر هر خط بنویسی تا خط بعدی، سناریوی همون محتواست و روز ضبطش بهت می‌دم."
-            )
+        if not self.is_owner(update):
+            return
+        self.awaiting_plan = True
+        await update.message.reply_text(
+            "📣 برج مارکتینگ: متن‌های پایین رو توی چت مارکتینگ هر برند توی Claude بچسبون "
+            "و جوابشون رو همینجا بفرست (یکی‌یکی یا همه با هم، یا فایل txt).\n"
+            "خودم استوری‌ها رو می‌دم به روزها، ریلزها رو می‌برم توی خط تولید Media Hub و بقیه کارها رو پخش می‌کنم."
+        )
+        for text in self.city.marketing_prompts(now_utc()):
+            await update.message.reply_text(text)
 
     async def script(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
@@ -345,14 +369,26 @@ class Bot:
             await update.message.reply_text("🎬 اسپرینت سه‌روزه محتوا دوباره شروع شد. روزی سه بار پیگیرت می‌شم.")
 
     async def import_plan(self, update: Update, text: str) -> None:
-        await update.message.reply_text("دارم برنامه رو می‌خونم...")
+        marketing = pipeline.is_marketing_plan(text)
+        await update.message.reply_text("📣 برج مارکتینگ داره برنامه رو باز می‌کنه..." if marketing
+                                        else "دارم برنامه رو می‌خونم...")
         try:
-            result = await asyncio.to_thread(self.city.import_content_plan, text, now_utc())
+            if marketing:
+                result = await asyncio.to_thread(self.city.import_marketing_plan, text, now_utc())
+            else:
+                result = await asyncio.to_thread(self.city.import_content_plan, text, now_utc())
         except Exception:
             log.exception("content plan import failed")
             await update.message.reply_text("نتونستم برنامه رو بخونم. یه بار دیگه بفرست یا ساده‌ترش کن.")
             return
-        await update.message.reply_text(f"{result.reply}\n\n{len(result.added)} کار توی 🎬 Media Hub ثبت شد.")
+        if marketing:
+            await update.message.reply_text(result.reply)
+        else:
+            await update.message.reply_text(f"{result.reply}\n\n{len(result.added)} کار توی 🎬 Media Hub ثبت شد.")
+        for kind in result.ask_times:
+            await update.message.reply_text(
+                f"🏛 {STAGE_WORK.get(kind, kind)}‌ها رو معمولاً کی انجام می‌دی؟ همون موقع یادت میندازم.",
+                reply_markup=time_keyboard(kind))
 
     # --- free text -------------------------------------------------------
     async def text(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -362,13 +398,13 @@ class Bot:
         menu = {
             MENU_TODAY: self.tasks, MENU_BUILDINGS: self.buildings, MENU_BRIEF: self.today,
             MENU_CITY: self.city_cmd, MENU_ALL: self.all_tasks, MENU_PROFILE: self.profile,
-            MENU_HELP: self.help, MENU_PLAN: self.plan_prompt,
+            MENU_HELP: self.help, MENU_PLAN: self.plan_prompt, "🎬 برنامه محتوا": self.plan_prompt,
         }
         if message in menu:
             self.awaiting_when = self.awaiting_split = None
             await menu[message](update, ctx)
             return
-        if self.awaiting_plan:
+        if self.awaiting_plan or pipeline.is_marketing_plan(message):
             self.awaiting_plan = False
             await self.import_plan(update, message)
             return
@@ -443,17 +479,44 @@ class Bot:
             ]
             await query.edit_message_reply_markup(InlineKeyboardMarkup(rows) if rows else None)
             return
+        if action == "t":
+            kind, at = rest[0], f"{rest[1][:2]}:{rest[1][2:]}"
+            self.city.set_kind_time(kind, at)
+            await query.answer("ثبت شد")
+            await query.edit_message_text(f"🏛 باشه، {STAGE_WORK.get(kind, kind)}‌ها ساعت {at}. همون موقع خبرت می‌کنم.")
+            return
+        if action == "f":
+            await query.answer()
+            self.focus = {"kind": rest[0], "done": 0, "skipped": set()}
+            await self.focus_next(query.message)
+            return
         task = self.db.get_task(task_id)
         if task is None:
             await query.answer("این کار پیدا نشد")
             return
         now = now_utc()
-        if action == "d":
-            if task.status != "done":
+        if action in ("n", "p"):
+            if self.focus is None:
+                self.focus = {"kind": task.kind, "done": 0, "skipped": set()}
+            if action == "n" and task.status == "open":
                 self.city.done(task_id, now)
+                self.focus["done"] += 1
+                await query.answer("یه طبقه به Media Hub اضافه شد 🏗")
+                await query.edit_message_text(f"✅ {task.title}")
+            else:
+                self.focus["skipped"].add(task_id)
+                await query.answer("رفت برای بعد")
+                await query.edit_message_reply_markup(None)
+            await self.focus_next(query.message)
+            return
+        if action == "d":
+            step = ""
+            if task.status != "done":
+                step = getattr(self.city.done(task_id, now), "next_step", "")
             await query.answer("یه طبقه اضافه شد 🏗")
             await query.message.reply_text(
-                f"✅ {task.title}\n{label(task.building)} یه طبقه بالاتر رفت. چقدر طول کشید؟",
+                f"✅ {task.title}\n{label(task.building)} یه طبقه بالاتر رفت."
+                + (f"\n🏛 {step}" if step else "") + "\nچقدر طول کشید؟",
                 reply_markup=duration_keyboard(task_id),
             )
         elif action == "s":
@@ -517,6 +580,29 @@ class Bot:
             await query.answer("ثبت شد" if minutes else "باشه")
             await query.edit_message_reply_markup(None)
 
+    async def focus_next(self, message) -> None:
+        """Filming or editing mode: one piece at a time with its script, then City Hall's wrap-up."""
+        f = self.focus
+        queue = [t for t in self.city.stage_queue(f["kind"], now_utc()) if t.id not in f["skipped"]]
+        if queue:
+            await message.reply_text(self.city.focus_text(queue[0], len(queue)), reply_markup=focus_keyboard(queue[0].id))
+            return
+        self.focus = None
+        work = STAGE_WORK.get(f["kind"], f["kind"])
+        if not f["done"]:
+            await message.reply_text(f"🏛 فعلاً چیزی برای {work} نمونده.")
+            return
+        nxt = "✂️ تدوین" if f["kind"] == "filming" else "📤 انتشار"
+        later = [t for t in self.db.open_tasks() if t.kind == ("editing" if f["kind"] == "filming" else "publish")
+                 and t.board == "today" and t.due_date]
+        when = min(t.due_date for t in later) if later else None
+        at = self.city.kind_time("editing" if f["kind"] == "filming" else "publish")
+        left = f" ({len(f['skipped'])} تا موند برای بعد)" if f["skipped"] else ""
+        await message.reply_text(
+            f"🏛 تالار شهر: {work} تموم شد ✅ {f['done']} محتوا{left}، {f['done']} طبقه به 🎬 Media Hub اضافه شد.\n"
+            + (f"مرحله بعد: {nxt}، {when}{' ساعت ' + at if at else ''}. روزش خبرت می‌کنم." if when else "")
+        )
+
     # --- the minute tick -------------------------------------------------
     async def tick(self, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         chat_id = self.owner_id()
@@ -533,6 +619,8 @@ class Bot:
                 markup = stuck_keyboard(m.task_id) if m.stuck else task_keyboard(m.task_id)
             elif m.done_buttons:
                 markup = done_keyboard([t.id for t in m.done_buttons])
+            elif m.start_kind:
+                markup = start_keyboard(m.start_kind)
             await ctx.bot.send_message(chat_id, m.text, reply_markup=markup)
 
 
@@ -554,12 +642,11 @@ def main() -> None:
             await app.bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(text="🏙 شهر", web_app=WebAppInfo(url=cfg.webapp_url))
             )
-        version = "2" if cfg.webapp_url else "1"
+        version = "3" if cfg.webapp_url else "3-text"  # bump when the menu's buttons change
         if bot.owner_id() and bot.db.get_state("menu_version") != version:
             bot.db.set_state("menu_version", version)
-            text = "🏛 منوی جدید شهرداری آماده‌ست. از دکمه‌های پایین استفاده کن، و هر کار تازه‌ای رو هم همینجا بنویس."
-            if cfg.webapp_url:
-                text = "🏙 شهر گرافیکی آماده‌ست! دکمه «باز کردن شهر» رو بزن."
+            text = ("🏛 تالار شهر آپدیت شد: دکمه «📣 برنامه مارکتینگ» متن آماده چت مارکتینگ هر برند رو می‌ده. "
+                    "جوابشون رو که بفرستی، خودم کارها رو بین Media Hub و بقیه ساختمون‌ها پخش می‌کنم.")
             await app.bot.send_message(bot.owner_id(), text, reply_markup=bot.menu_markup)
 
     async def post_shutdown(app: Application) -> None:
