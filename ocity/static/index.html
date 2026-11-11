@@ -34,27 +34,26 @@
   .view { display: none; } .view.on { display: block; }
 
   /* the skyline */
-  .sky { position: relative; border-radius: 18px; overflow-x: auto; overflow-y: hidden;
-    background: linear-gradient(var(--sky1), var(--sky2)); padding: 26px 10px 0; }
+  .sky { position: relative; border-radius: 18px; overflow: hidden;
+    background: linear-gradient(var(--sky1), var(--sky2)); }
   .night .sky { background: linear-gradient(#1d2b4a, #3b3a5a); }
-  .street { display: flex; align-items: flex-end; gap: 8px; min-width: max-content; height: 330px; }
-  .tower { width: 52px; display: flex; flex-direction: column; align-items: center; cursor: pointer;
-    border: 0; background: none; padding: 0; color: inherit; font: inherit; }
-  .tower .roof { font-size: 22px; line-height: 1; margin-bottom: 4px; }
-  .tower .body { position: relative; width: 44px; border-radius: 6px 6px 0 0;
-    background-color: var(--c);
-    background-image: repeating-linear-gradient(0deg, transparent 0 6px, rgba(255,255,255,.55) 6px 10px),
-      repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 6px, transparent 6px 12px);
-    background-blend-mode: normal; box-shadow: inset 0 -6px 0 rgba(0,0,0,.15);
-    transition: height .6s ease; }
-  .tower.scaffold .body::after { content: ""; position: absolute; inset: -3px -5px 0;
-    border: 2px solid #b07d2b; border-bottom: 0;
-    background: repeating-linear-gradient(45deg, transparent 0 7px, rgba(176,125,43,.75) 7px 9px); }
-  .tower.priority .roof::after { content: "⭐"; font-size: 11px; vertical-align: top; }
-  .tower .n { font-size: 11px; color: #3a3630; margin: 3px 0 2px; }
-  .night .tower .n { color: #e6e3dc; }
-  .tower .lbl { width: 60px; margin: 0 -4px; background: #5f5c56; color: #fff; font-size: 10px;
-    padding: 8px 2px 10px; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .sky svg { display: block; width: 100%; height: auto; }
+  .sky g.bld { cursor: pointer; }
+  .xp { margin: 0 16px 4px; background: color-mix(in srgb, var(--text) 10%, transparent); border-radius: 99px;
+    height: 9px; overflow: hidden; }
+  .xp i { display: block; height: 100%; background: linear-gradient(90deg, #f5b942, #f08a3c); border-radius: 99px;
+    transition: width .6s ease; }
+  .xpl { margin: 0 16px 10px; font-size: 12px; color: var(--muted); }
+  .stage { display: flex; gap: 12px; align-items: center; background: var(--card); border-radius: 14px;
+    padding: 10px; border: 1px solid var(--line); margin-bottom: 12px; }
+  .stage .art { width: 120px; flex: none; border-radius: 10px; overflow: hidden;
+    background: linear-gradient(#cfe6f7, #f3ead8); }
+  .stage .info { flex: 1; min-width: 0; }
+  .stage .lvl { font-weight: 700; }
+  .stage .bar { height: 8px; background: color-mix(in srgb, var(--text) 10%, transparent); border-radius: 9px;
+    overflow: hidden; margin: 8px 0 6px; }
+  .stage .bar i { display: block; height: 100%; background: #4bb06b; border-radius: 9px; }
+  .stage .sub { font-size: 12px; color: var(--muted); line-height: 1.6; }
   .legend { color: var(--muted); font-size: 12px; margin: 8px 2px 14px; line-height: 1.7; }
 
   /* lists */
@@ -102,16 +101,19 @@
 </head>
 <body>
 <header>
-  <h1>🏛 شهر OCity</h1>
+  <h1>🏙 شهر OCity</h1>
+  <span class="pill" id="level">⭐ …</span>
   <span class="pill" id="streak">🔥 …</span>
   <span class="pill" id="buffer" hidden></span>
 </header>
+<div class="xp"><i id="xp"></i></div>
+<div class="xpl" id="xpl"></div>
 
 <main>
   <section class="view on" id="v-city">
-    <div class="sky"><div class="street" id="street"></div></div>
-    <div class="legend">هر ✅ یه طبقه به ساختمونش اضافه می‌کنه. داربست یعنی کار عقب‌افتاده داره. ⭐ ساختمون‌های اولویت‌دار.
-      روی هر ساختمون بزن تا کارهاش رو ببینی. برای دیدن بقیه ساختمون‌ها، شهر رو به چپ بکش.</div>
+    <div class="sky" id="sky"></div>
+    <div class="legend">هر ✅ یه طبقه به ساختمونش اضافه می‌کنه. 🏗 جرثقیل یعنی کار باز داره، داربست و 🚧 یعنی کار عقب‌افتاده،
+      زمین خالی یعنی هنوز شروع نشده. ⭐ ساختمون‌های اولویت‌دار. روی هر ساختمون بزن تا مرحله و کارهاش رو ببینی.</div>
   </section>
 
   <section class="view" id="v-today"><div id="today"></div></section>
@@ -184,20 +186,122 @@ async function load() {
 
 function render() {
   $("streak").textContent = "🔥 " + fa(S.streak) + " روز";
+  const total = S.buildings.reduce((n, b) => n + b.floors, 0);
+  $("level").textContent = "⭐ سطح " + fa(Math.floor(total / LEVEL_EVERY) + 1);
+  $("xp").style.width = ((total % LEVEL_EVERY) / LEVEL_EVERY * 100) + "%";
+  $("xpl").textContent = `${fa(total)} طبقه ساخته شده، ${fa(LEVEL_EVERY - total % LEVEL_EVERY)} ✅ دیگه تا سطح بعدی شهر`;
   if (S.buffer !== null) { $("buffer").hidden = false; $("buffer").textContent = "🎬 ذخیره محتوا: " + fa(S.buffer); }
   drawCity(); drawToday(); drawChips();
 }
 
+const LEVEL_EVERY = 10;
+const STAGES = [[0, "زمین خالی"], [1, "پی"], [3, "خونه"], [7, "ساختمون"], [13, "برج"], [25, "آسمان‌خراش"]];
+const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16);
+  const ch = (v) => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${ch(n >> 16)},${ch((n >> 8) & 255)},${ch(n & 255)})`; };
+
 function drawCity() {
-  const max = Math.max(5, ...S.buildings.map((b) => b.floors));
-  $("street").innerHTML = S.buildings.map((b) => {
-    const h = 34 + Math.round((Math.min(b.floors, 40) / Math.min(max, 40)) * 200);
-    const cls = ["tower", b.overdue ? "scaffold" : "", b.priority ? "priority" : ""].join(" ");
-    return `<button class="${cls}" data-b="${b.key}" style="--c:${COLORS[b.key] || "#999"}">
-      <span class="roof">${b.emoji}</span><span class="body" style="height:${h}px"></span>
-      <span class="n">${floors(b.floors)}</span><span class="lbl">${esc(b.name)}</span></button>`;
-  }).join("");
-  document.querySelectorAll(".tower").forEach((el) => el.onclick = () => openBuilding(el.dataset.b));
+  // an isometric block: 4 columns, buildings in priority order, parks in the free lots
+  const W = 390, w = 46, h = 23, x0 = W / 2, cols = 4;
+  const slots = [...S.buildings];
+  while (slots.length % cols) slots.push(null);
+  if (slots.length < 12) slots.push(null, null, null, null);
+  const rows = slots.length / cols;
+  const most = Math.max(1, ...S.buildings.map((b) => b.floors));
+  const fh = Math.max(3, Math.min(9, 150 / most));
+  const top = 30 + Math.min(most, 40) * fh + 40;
+  const y0 = top;
+  const pt = (c, r) => [x0 + (c - r) * w, y0 + (c + r) * h];
+  const H_ = y0 + (cols + rows) * h + 10;
+  const tiles = slots.map((b, i) => ({ b, c: i % cols, r: Math.floor(i / cols) }))
+    .sort((p, q) => (p.c + p.r) - (q.c + q.r) || p.c - q.c);
+  const [ax, ay] = pt(-0.6, -0.6), [bx, by] = pt(cols - 0.4, -0.6), [cx, cy] = pt(cols - 0.4, rows - 0.4), [dx, dy] = pt(-0.6, rows - 0.4);
+  let svg = `<polygon points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="#8f8b84"/>`;
+  for (const t of tiles) {
+    const [x, y] = pt(t.c, t.r);
+    const b = t.b, tw = w * 0.8, th = h * 0.8;
+    svg += `<polygon points="${x},${y - h} ${x + w},${y} ${x},${y + h} ${x - w},${y}" fill="${b ? "#cfc6b6" : "#7cbf6a"}" stroke="#ffffff55"/>`;
+    if (!b) {
+      for (const [ox, oy] of [[-12, -2], [10, 2], [0, 8]])
+        svg += `<rect x="${x + ox - 1.5}" y="${y + oy - 10}" width="3" height="10" fill="#6b4a2b"/><circle cx="${x + ox}" cy="${y + oy - 14}" r="8" fill="#3f9a4a"/>`;
+      continue;
+    }
+    let g = "";
+    const c = COLORS[b.key] || "#999";
+    let labelY = y - 22;
+    if (b.floors === 0) {
+      g += `<polygon points="${x},${y - th} ${x + tw},${y} ${x},${y + th} ${x - tw},${y}" fill="#a47d55" stroke="#7a5a3a" stroke-dasharray="3 2"/>
+        <text x="${x}" y="${y + 5}" font-size="16" text-anchor="middle">🚧</text>`;
+    } else {
+      const n = Math.min(b.floors, 40), H = 10 + n * fh;
+      g += `<polygon points="${x - tw},${y} ${x},${y + th} ${x},${y + th - H} ${x - tw},${y - H}" fill="${shade(c, 0.78)}"/>
+        <polygon points="${x},${y + th} ${x + tw},${y} ${x + tw},${y - H} ${x},${y + th - H}" fill="${shade(c, 0.95)}"/>`;
+      if (fh >= 6) for (let i = 0; i < n; i++) {
+        const yy = y - 10 - i * fh + 2;
+        for (const k of [0.25, 0.6]) {
+          const lx = x - tw + tw * k, ly = yy + th * k;
+          g += `<polygon points="${lx},${ly} ${lx + 7},${ly + 3.5} ${lx + 7},${ly - 1.5} ${lx},${ly - 5}" fill="#fff6c9" opacity=".85"/>`;
+          const rx = x + tw * k - 7, ry = yy + th - th * k;
+          g += `<polygon points="${rx},${ry} ${rx + 7},${ry - 3.5} ${rx + 7},${ry - 8.5} ${rx},${ry - 5}" fill="#fff6c9" opacity=".7"/>`;
+        }
+      }
+      g += `<polygon points="${x},${y - th - H} ${x + tw},${y - H} ${x},${y + th - H} ${x - tw},${y - H}" fill="${shade(c, 1.15)}"/>`;
+      if (b.overdue)
+        g += `<polygon points="${x - tw - 3},${y + 2} ${x},${y + th + 3} ${x},${y + th - H + 8} ${x - tw - 3},${y - H + 8}" fill="url(#sc)" opacity=".9"/>`;
+      labelY = y - H - th - 10;
+      if (b.open && !b.overdue) {
+        const mx = x + tw * 0.55, my = y - H + 2;
+        g += `<line x1="${mx}" y1="${my}" x2="${mx}" y2="${my - 46}" stroke="#f2b632" stroke-width="3"/>
+          <line x1="${mx - 34}" y1="${my - 44}" x2="${mx + 12}" y2="${my - 44}" stroke="#f2b632" stroke-width="3"/>
+          <line x1="${mx - 28}" y1="${my - 44}" x2="${mx - 28}" y2="${my - 24}" stroke="#333" stroke-width="1"/>
+          <rect x="${mx - 32}" y="${my - 25}" width="8" height="5" fill="#666"/>`;
+      }
+    }
+    if (b.overdue) g += `<text x="${x - tw + 2}" y="${y + th + 12}" font-size="12">🚧</text>`;
+    const star = b.priority ? "⭐" : "";
+    g += `<g transform="translate(${x},${labelY})"><rect x="-22" y="-12" width="44" height="16" rx="8" fill="#1d1b18cc"/>
+      <text x="0" y="0" font-size="10" fill="#fff" text-anchor="middle">${b.emoji}${b.floors ? " " + fa(b.floors) : ""}${star}</text></g>`;
+    svg += `<g class="bld" data-b="${b.key}">${g}</g>`;
+  }
+  $("sky").innerHTML = `<svg viewBox="0 ${Math.max(0, y0 - top)} ${W} ${H_}" xmlns="http://www.w3.org/2000/svg">
+    <defs><pattern id="sc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <rect width="2" height="6" fill="#b07d2b"/></pattern></defs>${svg}</svg>`;
+  document.querySelectorAll("#sky g.bld").forEach((el) => el.onclick = () => openBuilding(el.dataset.b));
+}
+
+function stageOf(n) {
+  const i = STAGES.findLastIndex(([m]) => n >= m);
+  return { i, name: STAGES[i][1], next: STAGES[i + 1] };
+}
+
+function stageArt(b) {
+  const c = COLORS[b.key] || "#999", d = shade(c, 0.75), n = b.floors;
+  let s = `<rect y="88" width="160" height="20" fill="#9bc27a"/>`;
+  if (n === 0) s += `<rect x="40" y="78" width="80" height="12" fill="#a47d55"/><rect x="50" y="62" width="4" height="18" fill="#f28c28"/>
+    <rect x="104" y="62" width="4" height="18" fill="#f28c28"/><text x="80" y="62" font-size="20" text-anchor="middle">🚧</text>`;
+  else if (n < 3) s += `<rect x="50" y="64" width="60" height="26" fill="${c}"/><rect x="50" y="64" width="60" height="5" fill="${d}"/>
+    <line x1="120" y1="90" x2="120" y2="20" stroke="#f2b632" stroke-width="4"/><line x1="70" y1="22" x2="132" y2="22" stroke="#f2b632" stroke-width="4"/>`;
+  else if (n < 7) s += `<polygon points="45,55 80,30 115,55" fill="${d}"/><rect x="50" y="55" width="60" height="35" fill="${c}"/>
+    <rect x="60" y="62" width="12" height="10" fill="#fff6c9"/><rect x="88" y="62" width="12" height="10" fill="#fff6c9"/><rect x="74" y="74" width="12" height="16" fill="${d}"/>`;
+  else if (n < 13) { s += `<rect x="52" y="22" width="56" height="68" fill="${c}"/><rect x="52" y="18" width="56" height="6" fill="${d}"/>`;
+    for (let r = 0; r < 5; r++) for (let k = 0; k < 3; k++) s += `<rect x="${58 + k * 17}" y="${28 + r * 12}" width="10" height="7" fill="#fff6c9"/>`; }
+  else { s += `<rect x="60" y="6" width="40" height="84" fill="${c}"/><rect x="68" y="0" width="24" height="8" fill="${d}"/>
+    <rect x="38" y="44" width="22" height="46" fill="${d}"/><rect x="100" y="54" width="22" height="36" fill="${d}"/>`;
+    for (let r = 0; r < 7; r++) for (let k = 0; k < 2; k++) s += `<rect x="${66 + k * 16}" y="${14 + r * 11}" width="10" height="6" fill="#fff6c9"/>`; }
+  if (b.overdue) s += `<rect x="30" y="10" width="100" height="80" fill="url(#hatch)" opacity=".55"/>`;
+  return `<svg viewBox="0 0 160 108" width="100%" height="81" preserveAspectRatio="xMidYMax meet"><defs><pattern id="hatch" width="8" height="8"
+    patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="8" fill="#b07d2b"/></pattern></defs>${s}</svg>`;
+}
+
+function stageCard(b) {
+  const st = stageOf(b.floors);
+  const pct = st.next ? ((b.floors - STAGES[st.i][0]) / (st.next[0] - STAGES[st.i][0])) * 100 : 100;
+  const sub = [st.next ? `${fa(st.next[0] - b.floors)} ✅ تا «${st.next[1]}»` : "به بالاترین مرحله رسیده 🏆",
+    `${fa(b.open)} کار باز`];
+  if (b.overdue) sub.push(`🚧 ${fa(b.overdue)} کار عقب‌افتاده`);
+  return `<div class="stage"><div class="art">${stageArt(b)}</div><div class="info">
+    <div class="lvl">${st.name}، ${floors(b.floors)}</div><div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="sub">${sub.join("<br>")}</div></div></div>`;
 }
 
 function card(t, opts = {}) {
@@ -237,7 +341,7 @@ function drawToday() {
 
 function openBuilding(key) {
   const b = bmap()[key];
-  sheet(`<h3>${b.emoji} ${esc(b.name)}، ${floors(b.floors)}</h3>` +
+  sheet(`<h3>${b.emoji} ${esc(b.name)}</h3>` + stageCard(b) +
     (b.tasks.length ? b.tasks.map((t) => card(t, { noBuilding: true })).join("")
       : '<div class="empty">این ساختمون فعلاً کار بازی نداره.</div>') +
     `<button class="b wide" id="add-here">➕ کار جدید برای ${esc(b.name)}</button>`);
