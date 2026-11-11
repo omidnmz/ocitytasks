@@ -14,6 +14,10 @@ PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "0123
 # building -> words that point to it (lowercase, checked as substrings)
 KEYWORDS: dict[str, tuple[str, ...]] = {
     "vault": ("ایده",),
+    "retailos": ("retail os", "ریتیل", "ربات موجودی", "بات موجودی", "شیت موجودی", "شیت محصولات", "گوگل شیت",
+                 "google sheet"),
+    "techos": ("technician os", "تکنسین او اس", "پلتفرم تکنسین", "اپ تکنسین"),
+    "knowledge": ("دوره", "کورس", "پایگاه دانش", "خلاصه درس", "جلسه آموزشی"),
     "smarto": ("اسمارتو", "smarto", "اسمارت او", "دامین", "سرور تست"),
     "technician": ("کلینیک", "دندان", "تکنسین", "لابراتوار", "روکش", "ایمپلنت"),
     "fitness": ("فیتنس", "fitness", "باشگاه", "مینی اپ", "تستر"),

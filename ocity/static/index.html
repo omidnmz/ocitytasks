@@ -39,7 +39,29 @@
   .hero { position: relative; border-radius: 24px; overflow: hidden; box-shadow: var(--shadow); margin: 0 -10px;
     background: linear-gradient(180deg, #5b8def 0%, #a78bfa 55%, #fbcfe8 100%); }
   .hero.night { background: linear-gradient(180deg, #070b1d 0%, #1e1b4b 58%, #5b21b6 100%); }
-  .hero svg { display: block; width: 100%; height: auto; }
+  .hero svg.map { display: block; width: 100%; height: auto; position: relative; touch-action: pan-y; }
+  .hero svg.sky { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .hero .isl, .hero .sign { cursor: pointer; }
+  .hero [data-d] { transition: opacity .3s; }
+  .hero svg.focus [data-d].dim { opacity: .35; }
+  .hero .nm { opacity: 0; transition: opacity .3s; pointer-events: none; }
+  .hero svg.zoomed .nm { opacity: 1; }
+  .hero .br { opacity: .35; transition: opacity .3s; }
+  .hero svg.focus .br { opacity: .1; }
+  .hero svg.focus .br.hot { opacity: .85; stroke-width: 2; }
+  .hero .br { animation: flow 1.4s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -12; } }
+  .zoom-ui { position: absolute; bottom: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .zb { width: 36px; height: 36px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .45); color: #fff;
+    background: rgba(15, 23, 42, .28); backdrop-filter: blur(8px); font-size: 18px; cursor: pointer; }
+  .dchips { display: flex; gap: 8px; overflow-x: auto; margin: 12px -16px 0; padding: 2px 16px 4px; scrollbar-width: none; }
+  .dchips::-webkit-scrollbar { display: none; }
+  .dchips .chip { white-space: nowrap; flex: none; }
+  .dhead { margin: 14px 4px 10px; }
+  .dhead b { display: block; font-size: 16px; font-weight: 800; }
+  .dhead span { font-size: 12px; color: var(--muted); }
+  .dgroup { font-size: 13px; color: var(--muted); margin: 18px 4px 8px; font-weight: 700; }
+  .dgroup small { font-weight: 400; }
   .hero g.bld { cursor: pointer; transition: transform .2s; }
   .hero .chip-time { position: absolute; top: 12px; right: 12px; font-size: 11px; color: #fff;
     background: rgba(255, 255, 255, .18); border: 1px solid rgba(255, 255, 255, .35); padding: 4px 10px;
@@ -171,11 +193,14 @@
 <main>
   <section class="view on" id="v-city">
     <div class="hero" id="hero"></div>
+    <div class="dchips" id="dchips"></div>
+    <div id="dpanel"></div>
     <div class="stats" id="stats"></div>
     <div class="note" id="note"></div>
     <div id="focus"></div>
     <div class="legend">هر ✅ یه طبقه به ساختمونش اضافه می‌کنه. 🏗 جرثقیل یعنی کار باز داره، ⚠️ و داربست یعنی کار عقب‌افتاده،
-      نقشه آبی یعنی هنوز شروع نشده. ⭐ ساختمون‌های اولویت‌دار. روی هر ساختمون بزن تا مرحله و کارهاش رو ببینی.</div>
+      نقشه آبی یعنی هنوز شروع نشده. ⭐ ساختمون‌های اولویت‌دار. خط‌های نورانی پل‌هایی‌ان که ساختمون‌ها رو به هم وصل می‌کنن.
+      روی یه منطقه بزن تا زوم بشه، یا با دو انگشت بزرگ و کوچیکش کن.</div>
   </section>
 
   <section class="view" id="v-buildings"><div id="blist"></div></section>
@@ -206,14 +231,14 @@
 
 <script>
 const tg = window.Telegram && window.Telegram.WebApp;
-if (tg) { tg.ready(); tg.expand(); }
+if (tg) { tg.ready(); tg.expand(); try { tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch (e) {} }
 const dark = tg && tg.colorScheme ? tg.colorScheme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
 if (dark) document.documentElement.classList.add("dark");
 if (tg && tg.setHeaderColor) { try { tg.setHeaderColor(dark ? "#0a0f1f" : "#f3f4fa"); tg.setBackgroundColor(dark ? "#0a0f1f" : "#f3f4fa"); } catch (e) {} }
 
 const COLORS = { cityhall: "#d4a373", retail: "#f97362", media: "#8b5cf6", marketing: "#f59e0b",
   smarto: "#14b8a6", technician: "#3b82f6", fitness: "#22c55e", tradebot: "#64748b",
-  personal: "#ec4899", vault: "#eab308" };
+  personal: "#ec4899", vault: "#eab308", retailos: "#fb7185", techos: "#0ea5e9", knowledge: "#a78bfa" };
 const PALETTE = ["#0ea5e9", "#f43f5e", "#a855f7", "#84cc16", "#f97316", "#06b6d4", "#6366f1", "#d946ef"];
 const color = (key) => COLORS[key] || PALETTE[[...String(key)].reduce((n, ch) => n + ch.charCodeAt(0), 0) % PALETTE.length];
 const EMOJIS = ["🏢", "🏪", "🏬", "🏭", "🏦", "🏫", "🏥", "🏠", "🏗", "🏛", "🎬", "📣", "💡", "🦷", "💪", "📈",
@@ -264,7 +289,8 @@ async function load() {
 
 function render() {
   const total = S.buildings.reduce((n, b) => n + b.floors, 0);
-  const level = Math.floor(total / LEVEL_EVERY) + 1, into = total % LEVEL_EVERY;
+  const built = S.built ?? total;   // the city levels up from work done here, not from starting heights
+  const level = Math.floor(built / LEVEL_EVERY) + 1, into = built % LEVEL_EVERY;
   $("sub").textContent = `${fa(LEVEL_EVERY - into)} ✅ دیگه تا سطح ${fa(level + 1)}`;
   const stats = [
     `<div class="stat"><div class="ic ring" style="--p:${into / LEVEL_EVERY * 100}"><span>⭐</span></div>
@@ -284,93 +310,107 @@ function render() {
   badge.hidden = !late; badge.textContent = fa(late);
 }
 
-/* ---------- the city: a floating isometric diorama ---------- */
+/* ---------- the city: floating district islands, zoomable ---------- */
+// where each district sits, in district blocks (column, row) of the isometric grid
+const LAYOUT = { downtown: [0, 0], tech: [1, 0], support: [0, 1], center: [1, 1], personal: [2, 1], future: [1, 2] };
+const TINT = { downtown: "#f59e0b", tech: "#6366f1", support: "#a855f7", center: "#d4a373", personal: "#22c55e", future: "#14b8a6" };
+const mix = (a, b, k) => { const p = (x) => [parseInt(x.slice(1, 3), 16), parseInt(x.slice(3, 5), 16), parseInt(x.slice(5, 7), 16)];
+  const A = p(a), B = p(b); return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, "0")).join(""); };
+let VB0 = null, VB = null, focusD = null;
+
+function cityLayout() {
+  const blocks = {};
+  for (const d of S.districts) {
+    const members = S.buildings.filter((b) => (LAYOUT[b.district] ? b.district : "tech") === d.key);
+    const cols = members.length > 4 ? 3 : 2, rows = Math.max(2, Math.ceil(members.length / cols));
+    blocks[d.key] = { d, members, cols, rows };
+  }
+  // columns and rows of blocks get as wide as their widest district, with a gap of sky between islands
+  const GAP = 1.45, colW = {}, rowH = {};
+  for (const [k, bl] of Object.entries(blocks)) {
+    const [i, j] = LAYOUT[k] || [2, 2];
+    colW[i] = Math.max(colW[i] || 0, bl.cols); rowH[j] = Math.max(rowH[j] || 0, bl.rows);
+  }
+  const off = (sizes, n) => { let o = 0; for (let k = 0; k < n; k++) o += (sizes[k] || 2) + GAP; return o; };
+  for (const [k, bl] of Object.entries(blocks)) {
+    const [i, j] = LAYOUT[k] || [2, 2];
+    bl.c0 = off(colW, i) + ((colW[i] || bl.cols) - bl.cols) / 2;
+    bl.r0 = off(rowH, j) + ((rowH[j] || bl.rows) - bl.rows) / 2;
+  }
+  return blocks;
+}
+
 function drawCity() {
-  const night = (() => { const h = new Date().getHours(); return h < 6 || h >= 18; })();
-  // wide streets: each lot is a 64px tile, the building fills only 58% of it
-  const w = 64, h = 32, FP = 0.58, cols = 4;
-  const slots = [...S.buildings];
-  while (slots.length % cols) slots.push(null);
-  if (slots.length < 12) slots.push(null, null, null, null);
-  const rows = slots.length / cols;
-  const W = Math.round((cols + rows + 0.7) * w);
-  const x0 = W / 2 - ((cols - rows) / 2) * w;
+  const night = (() => { const hr = new Date().getHours(); return hr < 6 || hr >= 18; })();
+  const w = 56, h = 28, FP = 0.56;
+  const blocks = cityLayout();
+  const pt = (c, r) => [(c - r) * w, (c + r) * h];
   const most = Math.max(1, ...S.buildings.map((b) => b.floors));
-  const fh = Math.max(3.5, Math.min(11, 190 / most));
-  const y0 = 96 + Math.min(most, 40) * fh;
-  const pt = (c, r) => [x0 + (c - r) * w, y0 + (c + r) * h];
-  const Hsvg = y0 + (cols + rows) * h + 34;
-  const tiles = slots.map((b, i) => ({ b, c: i % cols, r: Math.floor(i / cols) }))
-    .sort((p, q) => (p.c + p.r) - (q.c + q.r) || p.c - q.c);
+  const fh = Math.max(3.5, Math.min(10, 170 / most));
+  const T = 12;
 
   let defs = `<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <radialGradient id="sun" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="${night ? "#fef9c3" : "#fff7ed"}" stop-opacity=".95"/>
-      <stop offset=".35" stop-color="${night ? "#fde68a" : "#fde68a"}" stop-opacity=".55"/><stop offset="1" stop-color="#fde68a" stop-opacity="0"/></radialGradient>
-    <linearGradient id="slabTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${night ? "#334155" : "#e2e8f0"}"/>
-      <stop offset="1" stop-color="${night ? "#1e293b" : "#cbd5e1"}"/></linearGradient>
     <linearGradient id="grass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#16a34a"/></linearGradient>
     <linearGradient id="crane" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde047"/><stop offset="1" stop-color="#f59e0b"/></linearGradient>
     <pattern id="sc" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="1.6" height="6" fill="#f59e0b"/></pattern>`;
-  let sky = "";
-  // sun or moon with a soft halo, stars at night, drifting clouds by day
-  sky += `<circle cx="70" cy="62" r="60" fill="url(#sun)"/><circle cx="70" cy="62" r="${night ? 13 : 16}" fill="${night ? "#fef3c7" : "#fff7ed"}"/>`;
-  if (night) {
-    sky += `<circle cx="76" cy="57" r="11" fill="#1e1b4b" opacity=".9"/>`;
-    for (let i = 0; i < 46; i++) {
-      const x = rnd(i) * W, y = rnd(i + 50) * (y0 - 40), r = rnd(i + 99) * 1.3 + .3;
-      sky += `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" opacity="${.35 + rnd(i + 7) * .6}">
-        <animate attributeName="opacity" values=".2;1;.2" dur="${3 + rnd(i) * 4}s" repeatCount="indefinite"/></circle>`;
-    }
-  } else {
-    for (const [cx, cy, s, d] of [[300, 54, 1, 38], [190, 98, .7, 52], [350, 140, .55, 44]])
-      sky += `<g opacity=".75"><g><ellipse cx="${cx}" cy="${cy}" rx="${34 * s}" ry="${11 * s}" fill="#fff"/>
-        <ellipse cx="${cx - 12 * s}" cy="${cy - 7 * s}" rx="${16 * s}" ry="${11 * s}" fill="#fff"/>
-        <ellipse cx="${cx + 10 * s}" cy="${cy - 9 * s}" rx="${14 * s}" ry="${12 * s}" fill="#fff"/>
-        <animateTransform attributeName="transform" type="translate" values="0 0;-26 0;0 0" dur="${d}s" repeatCount="indefinite"/></g></g>`;
+  let ground = "", city = "", signs = "", bridges = "";
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+  const grow = (x, y) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); };
+  const tiles = [], spots = {};
+  drawCity.fountain = false;
+
+  // 1. one floating island per district, tinted by what lives there
+  for (const [k, bl] of Object.entries(blocks)) {
+    const { c0, r0, cols, rows } = bl, tint = TINT[k] || "#94a3b8";
+    const [ax, ay] = pt(c0 - 0.4, r0 - 0.4), [bx, by] = pt(c0 + cols - 0.6, r0 - 0.4),
+      [cx, cy] = pt(c0 + cols - 0.6, r0 + rows - 0.6), [dx, dy] = pt(c0 - 0.4, r0 + rows - 0.6);
+    [[ax, ay], [bx, by], [cx, cy + T + 30], [dx, dy]].forEach(([x, y]) => grow(x, y));
+    const top = night ? mix("#1e293b", tint, .28) : mix("#f1f5f9", tint, .22);
+    ground += `<g class="isl" data-d="${k}">
+      <ellipse cx="${(ax + cx) / 2}" cy="${cy + T + 12}" rx="${(bx - dx) / 2.4}" ry="10" fill="#000" opacity=".2" filter="url(#soft)"/>
+      <polygon points="${dx},${dy} ${cx},${cy} ${cx},${cy + T} ${dx},${dy + T}" fill="${night ? mix("#0f172a", tint, .2) : mix("#94a3b8", tint, .25)}"/>
+      <polygon points="${cx},${cy} ${bx},${by} ${bx},${by + T} ${cx},${cy + T}" fill="${night ? mix("#1e293b", tint, .25) : mix("#a8b5c7", tint, .3)}"/>
+      <polygon class="isl-top" points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="${top}"/>`;
+    for (let r = 1; r < rows; r++) { const [p, q] = [pt(c0 - 0.4, r0 + r - 0.5), pt(c0 + cols - 0.6, r0 + r - 0.5)];
+      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${night ? "#475569" : "#fff"}" stroke-width="1" stroke-dasharray="4 5" opacity=".7"/>`; }
+    for (let c = 1; c < cols; c++) { const [p, q] = [pt(c0 + c - 0.5, r0 - 0.4), pt(c0 + c - 0.5, r0 + rows - 0.6)];
+      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${night ? "#475569" : "#fff"}" stroke-width="1" stroke-dasharray="4 5" opacity=".7"/>`; }
+    ground += `</g>`;
+    bl.box = { x: dx - 20, y: ay - 150, w: bx - dx + 40, h: cy - ay + 190 };
+    for (let i = 0; i < cols * rows; i++)
+      tiles.push({ b: bl.members[i] || null, d: k, c: c0 + (i % cols), r: r0 + Math.floor(i / cols) });
+    // the district's sign at the front tip of its island
+    const nm = `${bl.d.emoji} ${bl.d.name}`, sw = 18 + nm.length * 6.4;
+    signs += `<g class="sign" data-d="${k}" transform="translate(${cx},${cy + T + 16})">
+      <rect x="${-sw / 2}" y="-12" width="${sw}" height="22" rx="11" fill="${night ? "rgba(15,23,42,.75)" : "rgba(255,255,255,.88)"}" stroke="${tint}" stroke-width="1.5"/>
+      <text y="3.5" font-size="11" font-weight="800" fill="${night ? "#fff" : "#0f172a"}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${esc(nm)}</text></g>`;
+    grow(cx - sw / 2, cy + T + 30); grow(cx + sw / 2, cy + T + 30);
   }
 
-  // the floating slab
-  const [ax, ay] = pt(-0.85, -0.85), [bx, by] = pt(cols - 0.15, -0.85), [cx, cy] = pt(cols - 0.15, rows - 0.15), [dx, dy] = pt(-0.85, rows - 0.15);
-  const T = 16;
-  let city = `<ellipse cx="${x0}" cy="${cy + T + 14}" rx="${w * 3.4}" ry="18" fill="#000" opacity=".22" filter="url(#soft)"/>
-    <polygon points="${dx},${dy} ${cx},${cy} ${cx},${cy + T} ${dx},${dy + T}" fill="${night ? "#0f172a" : "#94a3b8"}"/>
-    <polygon points="${cx},${cy} ${bx},${by} ${bx},${by + T} ${cx},${cy + T}" fill="${night ? "#1e293b" : "#a8b5c7"}"/>
-    <polygon points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="url(#slabTop)"/>`;
-  // a curb ring, then road lanes along the grid
-  city += `<polygon points="${pt(-0.62, -0.62)} ${pt(cols - 0.38, -0.62)} ${pt(cols - 0.38, rows - 0.38)} ${pt(-0.62, rows - 0.38)}"
-    fill="none" stroke="${night ? "#334155" : "#e2e8f0"}" stroke-width="1.5" opacity=".9"/>`;
-  for (let r = 0; r <= rows; r++) {
-    const [p1x, p1y] = pt(-0.5, r - 0.5), [p2x, p2y] = pt(cols - 0.5, r - 0.5);
-    city += `<line x1="${p1x}" y1="${p1y}" x2="${p2x}" y2="${p2y}" stroke="${night ? "#475569" : "#f8fafc"}" stroke-width="1.2" stroke-dasharray="5 6" opacity=".8"/>`;
-  }
-  for (let c = 0; c <= cols; c++) {
-    const [p1x, p1y] = pt(c - 0.5, -0.5), [p2x, p2y] = pt(c - 0.5, rows - 0.5);
-    city += `<line x1="${p1x}" y1="${p1y}" x2="${p2x}" y2="${p2y}" stroke="${night ? "#475569" : "#f8fafc"}" stroke-width="1.2" stroke-dasharray="5 6" opacity=".8"/>`;
-  }
-
-  // a few cars on the streets
-  [[0, 1, 15], [1, 2, 19], [0, 3, 23], [1, 0, 17]].forEach(([dir, lane, dur], i) => {
-    if (dir === 0 && lane > rows) return;
-    const a = dir === 0 ? pt(-0.5, lane - 0.5) : pt(lane - 0.5, -0.5);
-    const b = dir === 0 ? pt(cols - 0.5, lane - 0.5) : pt(lane - 0.5, rows - 0.5);
-    const tint = ["#f43f5e", "#38bdf8", "#facc15", "#a3e635"][i];
-    city += `<g><ellipse rx="5.5" ry="3" fill="${tint}"/><ellipse rx="2.6" ry="1.5" cy="-1.2" fill="${night ? "#fde68a" : "#fff"}" opacity=".8"/>
-      <animateMotion path="M${a[0]},${a[1]} L${b[0]},${b[1]} L${a[0]},${a[1]}" dur="${dur}s" begin="-${i * 4}s" repeatCount="indefinite"/></g>`;
-  });
-
+  // 2. lots and buildings, back to front
+  tiles.sort((p, q) => (p.c + p.r) - (q.c + q.r) || p.c - q.c);
   tiles.forEach((t, idx) => {
-    const [x, y] = pt(t.c, t.r);
-    const b = t.b, tw = w * FP, th = h * FP;
+    const [x, y] = pt(t.c, t.r), b = t.b, tw = w * FP, th = h * FP;
     const lot = (k) => `${x},${y - h * k} ${x + w * k},${y} ${x},${y + h * k} ${x - w * k},${y}`;
-    if (!b) {   // a little park
-      city += `<polygon points="${lot(.78)}" fill="url(#grass)" opacity=".95"/>`;
-      for (const [ox, oy, s] of [[-17, -2, 1], [15, 1, .85], [0, 10, .95], [2, -11, .75]]) {
-        city += `<ellipse cx="${x + ox + 4}" cy="${y + oy + 1}" rx="${8 * s}" ry="${3.5 * s}" fill="#000" opacity=".18"/>
-          <rect x="${x + ox - 1.3}" y="${y + oy - 9 * s}" width="2.6" height="${9 * s}" rx="1" fill="#7c4a1e"/>
-          <circle cx="${x + ox}" cy="${y + oy - 14 * s}" r="${8.5 * s}" fill="#15803d"/>
-          <circle cx="${x + ox - 2.5 * s}" cy="${y + oy - 16 * s}" r="${5 * s}" fill="#4ade80" opacity=".8"/>`;
+    if (!b) {
+      if (t.d === "future") {   // a lot waiting for an idea
+        city += `<g data-d="${t.d}"><polygon points="${lot(.72)}" fill="${night ? "rgba(45,212,191,.08)" : "rgba(20,184,166,.10)"}" stroke="#14b8a6" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="${x}" y="${y + 4}" font-size="12" text-anchor="middle">🌱</text></g>`;
+      } else if (t.d === "center" && !drawCity.fountain) {   // the square's fountain
+        drawCity.fountain = true;
+        city += `<g data-d="${t.d}"><polygon points="${lot(.74)}" fill="${night ? "#334155" : "#fde7c7"}"/>
+          <ellipse cx="${x}" cy="${y}" rx="15" ry="7.5" fill="#38bdf8" opacity=".85"/><ellipse cx="${x}" cy="${y}" rx="7" ry="3.5" fill="#e0f2fe"/>
+          <line x1="${x}" y1="${y}" x2="${x}" y2="${y - 10}" stroke="#bae6fd" stroke-width="2"><animate attributeName="y2" values="${y - 6};${y - 12};${y - 6}" dur="1.8s" repeatCount="indefinite"/></line></g>`;
+      } else {   // a little park
+        city += `<g data-d="${t.d}"><polygon points="${lot(.74)}" fill="url(#grass)" opacity=".95"/>`;
+        for (const [ox, oy, s] of [[-14, -2, .9], [13, 1, .8], [0, 8, .85]])
+          city += `<ellipse cx="${x + ox + 4}" cy="${y + oy + 1}" rx="${7 * s}" ry="${3 * s}" fill="#000" opacity=".18"/>
+            <rect x="${x + ox - 1.2}" y="${y + oy - 8 * s}" width="2.4" height="${8 * s}" rx="1" fill="#7c4a1e"/>
+            <circle cx="${x + ox}" cy="${y + oy - 12 * s}" r="${7.5 * s}" fill="#15803d"/>
+            <circle cx="${x + ox - 2.2 * s}" cy="${y + oy - 14 * s}" r="${4.4 * s}" fill="#4ade80" opacity=".8"/>`;
+        city += `</g>`;
       }
       return;
     }
@@ -378,12 +418,10 @@ function drawCity() {
     defs += `<linearGradient id="L${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, .92)}"/><stop offset="1" stop-color="${shade(c, .62)}"/></linearGradient>
       <linearGradient id="R${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, 1.12)}"/><stop offset="1" stop-color="${shade(c, .82)}"/></linearGradient>
       <linearGradient id="T${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${shade(c, 1.35)}"/><stop offset="1" stop-color="${shade(c, 1.08)}"/></linearGradient>`;
-    let g = `<polygon points="${lot(.8)}" fill="${night ? "#273449" : "#f8fafc"}" opacity=".95"/>
-      <polygon points="${lot(.8)}" fill="transparent"/>`;
-    let labelY;
+    let g = `<polygon points="${lot(.78)}" fill="${night ? "#273449" : "#f8fafc"}" opacity=".95"/>`;
+    let labelY, H;
     if (b.floors === 0) {
-      // blueprint of the future building
-      const H = 34;
+      H = 30;
       g += `<g stroke="#38bdf8" stroke-width="1.2" fill="rgba(56,189,248,.10)" stroke-dasharray="4 3" filter="url(#glow)">
         <polygon points="${x - tw},${y} ${x},${y + th} ${x},${y + th - H} ${x - tw},${y - H}"/>
         <polygon points="${x},${y + th} ${x + tw},${y} ${x + tw},${y - H} ${x},${y + th - H}"/>
@@ -391,60 +429,197 @@ function drawCity() {
         <animate attributeName="stroke-dashoffset" values="0;14" dur="1.6s" repeatCount="indefinite"/></g>`;
       labelY = y - H - th - 12;
     } else {
-      const n = Math.min(b.floors, 40), H = 8 + n * fh;
-      g += `<ellipse cx="${x + 18}" cy="${y + 8}" rx="${tw + 10}" ry="${th}" fill="#000" opacity="${night ? .35 : .2}" filter="url(#soft)"/>`;
-      if (b.overdue) g += `<polygon points="${lot(.84)}" fill="none" stroke="#f59e0b" stroke-width="2.4" filter="url(#glow)">
+      const n = Math.min(b.floors, 40); H = 8 + n * fh;
+      g += `<ellipse cx="${x + 16}" cy="${y + 7}" rx="${tw + 8}" ry="${th}" fill="#000" opacity="${night ? .35 : .2}" filter="url(#soft)"/>`;
+      if (b.overdue) g += `<polygon points="${lot(.82)}" fill="none" stroke="#f59e0b" stroke-width="2.4" filter="url(#glow)">
         <animate attributeName="opacity" values=".25;1;.25" dur="1.6s" repeatCount="indefinite"/></polygon>`;
       g += `<polygon points="${x - tw},${y} ${x},${y + th} ${x},${y + th - H} ${x - tw},${y - H}" fill="url(#L${id})"/>
         <polygon points="${x},${y + th} ${x + tw},${y} ${x + tw},${y - H} ${x},${y + th - H}" fill="url(#R${id})"/>`;
-      // windows: glass by day, warm lights by night
       if (fh >= 5) for (let i = 0; i < n; i++) {
         const yy = y - 8 - i * fh + 1.5;
-        for (const [k, j] of [[0.13, 0], [0.43, 1], [0.73, 2]]) {
+        for (const [k, j] of [[0.14, 0], [0.46, 1], [0.76, 2]]) {
           const on = !night || rnd(idx * 97 + i * 7 + j) > .3;
-          const col = night ? (on ? "#fde68a" : "#1e293b") : "#e0f2fe";
-          const op = night ? (on ? .95 : .7) : .75;
           const lx = x - tw + tw * k, ly = yy + th * k;
-          g += `<polygon points="${lx},${ly} ${lx + 8},${ly + 4} ${lx + 8},${ly - fh * .45 + 4} ${lx},${ly - fh * .45}" fill="${col}" opacity="${op}" ${night && on ? 'filter="url(#glow)"' : ""}/>`;
+          g += `<polygon points="${lx},${ly} ${lx + 6},${ly + 3} ${lx + 6},${ly - fh * .45 + 3} ${lx},${ly - fh * .45}" fill="${night ? (on ? "#fde68a" : "#1e293b") : "#e0f2fe"}" opacity="${night ? (on ? .95 : .7) : .75}"/>`;
           const on2 = !night || rnd(idx * 53 + i * 11 + j) > .35;
           const rx = x + tw * k - 1, ry = yy + th - th * k;
-          g += `<polygon points="${rx},${ry} ${rx + 8},${ry - 4} ${rx + 8},${ry - 4 - fh * .45} ${rx},${ry - fh * .45}" fill="${night ? (on2 ? "#fcd34d" : "#1e293b") : "#bae6fd"}" opacity="${night ? (on2 ? .85 : .7) : .55}"/>`;
+          g += `<polygon points="${rx},${ry} ${rx + 6},${ry - 3} ${rx + 6},${ry - 3 - fh * .45} ${rx},${ry - fh * .45}" fill="${night ? (on2 ? "#fcd34d" : "#1e293b") : "#bae6fd"}" opacity="${night ? (on2 ? .85 : .7) : .55}"/>`;
         }
       }
-      // glossy edge and roof
       g += `<line x1="${x}" y1="${y + th}" x2="${x}" y2="${y + th - H}" stroke="rgba(255,255,255,.35)" stroke-width="1"/>
         <polygon points="${x},${y - th - H} ${x + tw},${y - H} ${x},${y + th - H} ${x - tw},${y - H}" fill="url(#T${id})" stroke="rgba(255,255,255,.55)" stroke-width="1"/>
         <polygon points="${x},${y - th * .55 - H} ${x + tw * .55},${y - H} ${x},${y + th * .55 - H} ${x - tw * .55},${y - H}" fill="rgba(255,255,255,.18)"/>`;
       if (b.overdue)
         g += `<polygon points="${x - tw - 3},${y + 2} ${x},${y + th + 3} ${x},${y + th - H + 6} ${x - tw - 3},${y - H + 6}" fill="url(#sc)" opacity=".85"/>`;
       const roof = y - H;
-      if (n >= 7) g += `<line x1="${x}" y1="${roof}" x2="${x}" y2="${roof - 22}" stroke="${night ? "#cbd5e1" : "#475569"}" stroke-width="1.4"/>
-        <circle cx="${x}" cy="${roof - 23}" r="2.2" fill="#ef4444" filter="url(#glow)"><animate attributeName="opacity" values="1;.15;1" dur="1.4s" repeatCount="indefinite"/></circle>`;
-      labelY = roof - th - (n >= 7 ? 34 : 14);
+      if (n >= 7) g += `<line x1="${x}" y1="${roof}" x2="${x}" y2="${roof - 20}" stroke="${night ? "#cbd5e1" : "#475569"}" stroke-width="1.3"/>
+        <circle cx="${x}" cy="${roof - 21}" r="2" fill="#ef4444" filter="url(#glow)"><animate attributeName="opacity" values="1;.15;1" dur="1.4s" repeatCount="indefinite"/></circle>`;
+      labelY = roof - th - (n >= 7 ? 30 : 13);
       if (b.open && !b.overdue) {   // a crane that slowly swings
         const mx = x + tw * 0.5, my = roof + 1;
-        g += `<line x1="${mx}" y1="${my}" x2="${mx}" y2="${my - 48}" stroke="url(#crane)" stroke-width="3" stroke-linecap="round"/>
-          <g><line x1="${mx - 36}" y1="${my - 46}" x2="${mx + 12}" y2="${my - 46}" stroke="url(#crane)" stroke-width="3" stroke-linecap="round"/>
-          <line x1="${mx - 30}" y1="${my - 46}" x2="${mx - 30}" y2="${my - 26}" stroke="${night ? "#e2e8f0" : "#334155"}" stroke-width="1"/>
-          <rect x="${mx - 34}" y="${my - 27}" width="8" height="6" rx="1.5" fill="${night ? "#94a3b8" : "#475569"}"/>
-          <animateTransform attributeName="transform" type="rotate" values="-5 ${mx} ${my - 46};5 ${mx} ${my - 46};-5 ${mx} ${my - 46}" dur="7s" repeatCount="indefinite"/></g>`;
-        labelY = Math.min(labelY, my - 60);
+        g += `<line x1="${mx}" y1="${my}" x2="${mx}" y2="${my - 42}" stroke="url(#crane)" stroke-width="2.6" stroke-linecap="round"/>
+          <g><line x1="${mx - 32}" y1="${my - 40}" x2="${mx + 10}" y2="${my - 40}" stroke="url(#crane)" stroke-width="2.6" stroke-linecap="round"/>
+          <line x1="${mx - 26}" y1="${my - 40}" x2="${mx - 26}" y2="${my - 22}" stroke="${night ? "#e2e8f0" : "#334155"}" stroke-width="1"/>
+          <rect x="${mx - 30}" y="${my - 23}" width="7" height="5" rx="1.5" fill="${night ? "#94a3b8" : "#475569"}"/>
+          <animateTransform attributeName="transform" type="rotate" values="-5 ${mx} ${my - 40};5 ${mx} ${my - 40};-5 ${mx} ${my - 40}" dur="7s" repeatCount="indefinite"/></g>`;
+        labelY = Math.min(labelY, my - 54);
       }
     }
-    // a glass label with the building, its floors and a priority dot
-    const txt = `${b.emoji}${b.floors ? " " + fa(b.floors) : ""}`;
-    const lw = 30 + (b.floors ? String(b.floors).length * 8 : 0) + (b.priority ? 9 : 0) + (b.overdue ? 14 : 0);
+    // label: emoji and floors from afar, the building's name too once zoomed in
+    const short = `${b.overdue ? "⚠️" : ""}${b.emoji}${b.floors ? " " + fa(b.floors) : ""}`;
+    const lw = 28 + (b.floors ? String(b.floors).length * 7 : 0) + (b.priority ? 9 : 0) + (b.overdue ? 13 : 0);
+    const name = esc(b.name.length > 16 ? b.name.slice(0, 15) + "…" : b.name), nw = 16 + b.name.slice(0, 16).length * 4.6;
+    const bg = night ? "rgba(15,23,42,.65)" : "rgba(255,255,255,.8)", fg = night ? "#fff" : "#0f172a";
     g += `<g transform="translate(${x},${labelY})">
-      <rect x="${-lw / 2}" y="-14" width="${lw}" height="22" rx="11" fill="${night ? "rgba(15,23,42,.6)" : "rgba(255,255,255,.75)"}" stroke="${night ? "rgba(255,255,255,.25)" : "rgba(255,255,255,.95)"}"/>
-      <text x="${b.priority ? 3 : 0}" y="2" font-size="12" font-weight="700" fill="${night ? "#fff" : "#0f172a"}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${b.overdue ? "⚠️" : ""}${txt}</text>
-      ${b.priority ? `<circle cx="${lw / 2 - 8}" cy="-3" r="3.4" fill="#fbbf24" stroke="#fff" stroke-width="1"/>` : ""}</g>`;
-    city += `<g class="bld" data-b="${b.key}">${g}</g>`;
+      <rect x="${-lw / 2}" y="-13" width="${lw}" height="20" rx="10" fill="${bg}" stroke="${night ? "rgba(255,255,255,.25)" : "#fff"}"/>
+      <text x="${b.priority ? 3 : 0}" y="1.5" font-size="11" font-weight="700" fill="${fg}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${short}</text>
+      ${b.priority ? `<circle cx="${lw / 2 - 7}" cy="-3" r="3.2" fill="#fbbf24" stroke="#fff" stroke-width="1"/>` : ""}
+      <g class="nm"><rect x="${-nw / 2}" y="9" width="${nw}" height="13" rx="6.5" fill="${bg}"/>
+        <text y="18.5" font-size="7.5" font-weight="700" fill="${fg}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${name}</text></g></g>`;
+    grow(x, labelY - 16);
+    spots[b.key] = { x, y: y - H * 0.75, d: t.d };
+    city += `<g class="bld" data-b="${b.key}" data-d="${t.d}">${g}</g>`;
   });
 
+  // 3. skybridges between buildings that serve each other
+  const seen = new Set();
+  for (const b of S.buildings) for (const k of b.bridges || []) {
+    const pair = [b.key, k].sort().join("|");
+    if (seen.has(pair) || !spots[b.key] || !spots[k]) continue;
+    seen.add(pair);
+    const A = spots[b.key], B = spots[k];
+    const mx = (A.x + B.x) / 2, my = Math.min(A.y, B.y) - 26 - Math.abs(A.x - B.x) * .12;
+    bridges += `<path class="br" data-a="${A.d}" data-b="${B.d}" d="M${A.x},${A.y} Q${mx},${my} ${B.x},${B.y}" fill="none"
+      stroke="${night ? "#fde68a" : "#ffffff"}" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="1 5" vector-effect="non-scaling-stroke"/>`;
+  }
+
+  VB0 = { x: minX - 24, y: minY - 14, w: maxX - minX + 48, h: maxY - minY + 28 };
+  if (!VB || !focusD) VB = { ...VB0 };
+  const sky = night ? Array.from({ length: 40 }, (_, i) =>
+    `<circle cx="${rnd(i) * 100}%" cy="${rnd(i + 50) * 60}%" r="${rnd(i + 99) * 1.2 + .3}" fill="#fff" opacity="${.35 + rnd(i + 7) * .6}">
+      <animate attributeName="opacity" values=".2;1;.2" dur="${3 + rnd(i) * 4}s" repeatCount="indefinite"/></circle>`).join("") : "";
   $("hero").className = "hero" + (night ? " night" : "");
-  $("hero").innerHTML = `<span class="chip-time">${night ? "🌙 شب شهر" : "☀️ روز شهر"}</span>
-    <svg viewBox="0 0 ${W} ${Hsvg}" xmlns="http://www.w3.org/2000/svg"><defs>${defs}</defs>${sky}${city}</svg>`;
-  document.querySelectorAll("#hero g.bld").forEach((el) => el.onclick = () => openBuilding(el.dataset.b));
+  $("hero").innerHTML = `<svg class="sky" xmlns="http://www.w3.org/2000/svg">${sky}
+      <circle cx="16%" cy="12%" r="${night ? 12 : 15}" fill="${night ? "#fef3c7" : "#fff7ed"}" opacity=".95"/>
+      ${night ? `<circle cx="17.5%" cy="10.8%" r="10" fill="#1e1b4b" opacity=".9"/>` : ""}</svg>
+    <span class="chip-time">${night ? "🌙 شب شهر" : "☀️ روز شهر"}</span>
+    <svg class="map" id="map" viewBox="${VB.x} ${VB.y} ${VB.w} ${VB.h}" style="aspect-ratio:${VB0.w} / ${VB0.h}" xmlns="http://www.w3.org/2000/svg">
+      <defs>${defs}</defs>${ground}${city}<g class="bridges">${bridges}</g>${signs}</svg>
+    <div class="zoom-ui"><button class="zb" id="z-in" aria-label="بزرگ‌نمایی">＋</button><button class="zb" id="z-out" aria-label="کوچک‌نمایی">－</button></div>`;
+  drawDistricts(); bindMap(blocks); setFocus(focusD, blocks, false);
+}
+
+/* district chips under the map, and the panel of the chosen district */
+function drawDistricts() {
+  $("dchips").innerHTML = `<button class="chip ${focusD ? "" : "on"}" data-d="">🔍 کل شهر</button>` +
+    S.districts.map((d) => `<button class="chip ${focusD === d.key ? "on" : ""}" data-d="${d.key}">${d.emoji} ${esc(d.name)}</button>`).join("");
+  $("dchips").querySelectorAll(".chip").forEach((c) => c.onclick = () => setFocus(c.dataset.d || null));
+}
+
+function setFocus(d, blocks = cityLayout(), animate = true) {
+  focusD = d || null;
+  const map = $("map");
+  map.classList.toggle("focus", !!focusD);
+  map.querySelectorAll("[data-d]").forEach((el) => el.classList.toggle("dim", !!focusD && el.dataset.d !== focusD));
+  map.querySelectorAll(".br").forEach((el) => el.classList.toggle("hot", !!focusD && (el.dataset.a === focusD || el.dataset.b === focusD)));
+  $("dchips").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", (c.dataset.d || null) === focusD));
+  if (focusD && blocks[focusD]) {
+    const bl = blocks[focusD];
+    // recompute the island box from the drawn lots (labels and roofs included)
+    const els = [...map.querySelectorAll(`.isl[data-d="${focusD}"], .bld[data-d="${focusD}"]`)];
+    let box = null;
+    for (const el of els) { const r = el.getBBox(); box = box ? { x: Math.min(box.x, r.x), y: Math.min(box.y, r.y),
+      x2: Math.max(box.x2, r.x + r.width), y2: Math.max(box.y2, r.y + r.height) } : { x: r.x, y: r.y, x2: r.x + r.width, y2: r.y + r.height }; }
+    zoomTo(box ? { x: box.x - 16, y: box.y - 10, w: box.x2 - box.x + 32, h: box.y2 - box.y + 44 } : bl.box, animate);
+    const d = S.districts.find((x) => x.key === focusD), members = bl.members;
+    $("dpanel").innerHTML = `<div class="dhead"><b>${d.emoji} ${esc(d.name)}</b><span>${esc(d.about)}</span></div>` +
+      (members.length ? members.map(browHTML).join("") : '<div class="empty">این منطقه هنوز ساختمونی نداره.</div>');
+    bindBrows($("dpanel"));
+  } else {
+    if (animate) zoomTo(VB0, true);
+    $("dpanel").innerHTML = "";
+  }
+}
+
+function fit(r) {   // keep the map's shape and stay over the city
+  const ar = VB0.w / VB0.h;
+  let { x, y, w, h } = r;
+  if (w / h > ar) { const nh = w / ar; y -= (nh - h) / 2; h = nh; } else { const nw = h * ar; x -= (nw - w) / 2; w = nw; }
+  w = Math.min(Math.max(w, VB0.w / 5), VB0.w); h = w / ar;
+  // a little room past the edges so a district at the side can still sit in the middle
+  const mx = (VB0.w - w) > 1 ? w * .3 : 0, my = (VB0.h - h) > 1 ? h * .3 : 0;
+  x = Math.min(Math.max(x, VB0.x - mx), VB0.x + VB0.w - w + mx); y = Math.min(Math.max(y, VB0.y - my), VB0.y + VB0.h - h + my);
+  return { x, y, w, h };
+}
+
+function applyVB() {
+  const m = $("map"); if (!m) return;
+  m.setAttribute("viewBox", `${VB.x} ${VB.y} ${VB.w} ${VB.h}`);
+  m.classList.toggle("zoomed", VB.w < VB0.w * 0.8);
+}
+
+function zoomTo(r, animate = true) {
+  const to = fit(r), from = { ...VB };
+  cancelAnimationFrame(zoomTo.raf);
+  if (!animate) { VB = to; return applyVB(); }
+  const t0 = performance.now(), D = 450;
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
+    VB = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, w: from.w + (to.w - from.w) * e, h: from.h + (to.h - from.h) * e };
+    applyVB(); if (k < 1) zoomTo.raf = requestAnimationFrame(step);
+  };
+  zoomTo.raf = requestAnimationFrame(step);
+}
+
+function zoomBy(f, cx = VB.x + VB.w / 2, cy = VB.y + VB.h / 2) {
+  const w = VB.w * f, h = VB.h * f;
+  VB = fit({ x: cx - (cx - VB.x) * f, y: cy - (cy - VB.y) * f, w, h }); applyVB();
+}
+
+function bindMap(blocks) {
+  const map = $("map");
+  const toSvg = (px, py) => { const r = map.getBoundingClientRect();
+    return [VB.x + (px - r.left) / r.width * VB.w, VB.y + (py - r.top) / r.height * VB.h]; };
+  let pinch = null, pan = null, moved = false;
+  map.addEventListener("touchstart", (e) => {
+    moved = false;
+    if (e.touches.length === 2) {
+      const [a, b] = e.touches;
+      pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), vb: { ...VB },
+        c: toSvg((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2) };
+      pan = null; e.preventDefault();
+    } else if (e.touches.length === 1 && VB.w < VB0.w * 0.98) {
+      pan = { x: e.touches[0].clientX, y: e.touches[0].clientY, vb: { ...VB } };
+    }
+  }, { passive: false });
+  map.addEventListener("touchmove", (e) => {
+    const r = map.getBoundingClientRect();
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault(); moved = true;
+      const [a, b] = e.touches, d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const f = pinch.d / d, [cx, cy] = pinch.c, v = pinch.vb;
+      VB = fit({ x: cx - (cx - v.x) * f, y: cy - (cy - v.y) * f, w: v.w * f, h: v.h * f }); applyVB();
+    } else if (pan && e.touches.length === 1) {
+      const dx = e.touches[0].clientX - pan.x, dy = e.touches[0].clientY - pan.y;
+      if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
+      if (!moved) return;
+      e.preventDefault();
+      VB = fit({ ...pan.vb, x: pan.vb.x - dx / r.width * pan.vb.w, y: pan.vb.y - dy / r.height * pan.vb.h }); applyVB();
+    }
+  }, { passive: false });
+  map.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch = null; if (!e.touches.length) pan = null; });
+  map.addEventListener("wheel", (e) => { e.preventDefault(); const [cx, cy] = toSvg(e.clientX, e.clientY);
+    zoomBy(e.deltaY > 0 ? 1.15 : 1 / 1.15, cx, cy); }, { passive: false });
+  // a tap from afar picks the district; once inside, a tap on a building opens it
+  map.addEventListener("click", (e) => {
+    if (moved) { moved = false; return; }
+    const bld = e.target.closest("g.bld"), dEl = e.target.closest("[data-d]");
+    const d = dEl && dEl.dataset.d;
+    if (bld && (focusD === bld.dataset.d || map.classList.contains("zoomed"))) return openBuilding(bld.dataset.b);
+    if (d) { if (tg) tg.HapticFeedback.selectionChanged(); return setFocus(d, blocks); }
+  });
+  $("z-in").onclick = () => zoomBy(1 / 1.4);
+  $("z-out").onclick = () => { if (VB.w * 1.4 >= VB0.w) setFocus(null, blocks); else zoomBy(1.4); };
 }
 
 /* ---------- stage card ---------- */
@@ -534,41 +709,56 @@ function drawFocus() {
 }
 
 /* ---------- buildings tab ---------- */
-function drawBuildings() {
-  const rows = S.buildings.map((b) => {
-    const st = stageOf(b.floors);
-    const pct = st.next ? ((b.floors - STAGES[st.i][0]) / (st.next[0] - STAGES[st.i][0])) * 100 : 100;
-    const bits = [b.floors ? `${st.name}، ${floors(b.floors)}` : "زمین خالی", b.open ? `${fa(b.open)} کار باز` : "بدون کار باز"];
-    if (b.overdue) bits.push(`<span class="late">⚠️ ${fa(b.overdue)} عقب‌افتاده</span>`);
-    return `<div class="brow" data-k="${b.key}" style="--bc:${color(b.key)}">
-      <div class="bem">${b.emoji}</div>
-      <div class="bi"><div class="bn"><span>${esc(b.name)}</span>${b.priority ? "⭐" : ""}</div>
-        <div class="bs">${bits.join(" • ")}</div><div class="mini"><i style="width:${Math.max(pct, 4)}%"></i></div></div>
-      <button class="edit" data-edit="${b.key}" aria-label="ویرایش">✏️</button></div>`;
-  });
-  $("blist").innerHTML = `<h2>🏢 ساختمون‌های شهر (${fa(S.buildings.length)})</h2>${rows.join("")}
-    <button class="b wide" id="new-b" style="margin-top:4px">＋ ساختمون جدید</button>
-    <div class="legend">روی ✏️ بزن تا اسم، نماد یا اولویتش رو عوض کنی. ساختمون‌های ⭐ اول لیست و پیام صبح میان.</div>`;
-  $("blist").querySelectorAll(".brow").forEach((el) => el.onclick = (e) => {
+function browHTML(b) {
+  const st = stageOf(b.floors);
+  const pct = st.next ? ((b.floors - STAGES[st.i][0]) / (st.next[0] - STAGES[st.i][0])) * 100 : 100;
+  const bits = [b.floors ? `${st.name}، ${floors(b.floors)}` : "زمین خالی", b.open ? `${fa(b.open)} کار باز` : "بدون کار باز"];
+  if (b.overdue) bits.push(`<span class="late">⚠️ ${fa(b.overdue)} عقب‌افتاده</span>`);
+  return `<div class="brow" data-k="${b.key}" style="--bc:${color(b.key)}">
+    <div class="bem">${b.emoji}</div>
+    <div class="bi"><div class="bn"><span>${esc(b.name)}</span>${b.priority ? "⭐" : ""}</div>
+      <div class="bs">${bits.join(" • ")}</div><div class="mini"><i style="width:${Math.max(pct, 4)}%"></i></div></div>
+    <button class="edit" data-edit="${b.key}" aria-label="ویرایش">✏️</button></div>`;
+}
+
+function bindBrows(root) {
+  root.querySelectorAll(".brow").forEach((el) => el.onclick = (e) => {
     if (e.target.closest(".edit")) return editBuilding(el.dataset.k);
     openBuilding(el.dataset.k);
   });
+}
+
+function drawBuildings() {
+  const groups = S.districts.map((d) => {
+    const members = S.buildings.filter((b) => b.district === d.key);
+    return members.length ? `<div class="dgroup">${d.emoji} ${esc(d.name)} <small>• ${esc(d.about)}</small></div>` +
+      members.map(browHTML).join("") : "";
+  });
+  $("blist").innerHTML = `<h2>🏢 ساختمون‌های شهر (${fa(S.buildings.length)})</h2>${groups.join("")}
+    <button class="b wide" id="new-b" style="margin-top:4px">＋ ساختمون جدید</button>
+    <div class="legend">روی ✏️ بزن تا اسم، نماد، منطقه یا اولویتش رو عوض کنی. ساختمون‌های ⭐ اول لیست و پیام صبح میان.</div>`;
+  bindBrows($("blist"));
   $("new-b").onclick = () => editBuilding(null);
 }
 
 function editBuilding(key) {
-  const b = key ? bmap()[key] : { name: "", emoji: "🏢", priority: false };
-  let emoji = b.emoji, prio = b.priority;
+  const b = key ? bmap()[key] : { name: "", emoji: "🏢", priority: false, district: focusD || "tech" };
+  let emoji = b.emoji, prio = b.priority, district = b.district;
   const list = EMOJIS.includes(emoji) ? EMOJIS : [emoji, ...EMOJIS];
   sheet(`<h3>${key ? "✏️ ویرایش ساختمون" : "＋ ساختمون جدید"}</h3>
     <label class="f">اسم</label><input class="in" id="e-name" maxlength="30" value="${esc(b.name)}" placeholder="مثلاً: فروشگاه دوم">
     <label class="f">نماد</label><div class="chips emojis" id="e-emoji">${list.map((e) =>
       `<button class="chip ${e === emoji ? "on" : ""}" data-e="${e}">${e}</button>`).join("")}</div>
+    <label class="f">منطقه</label><div class="chips" id="e-dist">${S.districts.map((d) =>
+      `<button class="chip ${d.key === district ? "on" : ""}" data-d="${d.key}">${d.emoji} ${esc(d.name)}</button>`).join("")}</div>
     <div class="toggle" id="e-prio"><div>⭐ اولویت‌دار<small>اول لیست و پیام صبح میاد</small></div>
       <div class="switch ${prio ? "on" : ""}"></div></div>
     <button class="b main wide" id="e-save">${key ? "ذخیره" : "ساختن ساختمون"}</button>`);
   $("e-emoji").querySelectorAll(".chip").forEach((c) => c.onclick = () => {
     emoji = c.dataset.e; $("e-emoji").querySelectorAll(".chip").forEach((x) => x.classList.toggle("on", x === c));
+  });
+  $("e-dist").querySelectorAll(".chip").forEach((c) => c.onclick = () => {
+    district = c.dataset.d; $("e-dist").querySelectorAll(".chip").forEach((x) => x.classList.toggle("on", x === c));
   });
   $("e-prio").onclick = () => { prio = !prio; $("e-prio").querySelector(".switch").classList.toggle("on", prio); };
   if (!key) setTimeout(() => $("e-name").focus(), 300);
@@ -576,7 +766,7 @@ function editBuilding(key) {
     const name = $("e-name").value.trim();
     if (!name) return toast("یه اسم براش بنویس.");
     try {
-      const r = await api(key ? `/api/building/${key}` : "/api/building", { name, emoji, priority: prio });
+      const r = await api(key ? `/api/building/${key}` : "/api/building", { name, emoji, priority: prio, district });
       if (tg) tg.HapticFeedback.notificationOccurred("success");
       toast(r.message); closeSheet(); await load();
     } catch (e) { toast("ذخیره نشد، دوباره امتحان کن."); }

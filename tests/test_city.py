@@ -388,3 +388,24 @@ def test_buildings_can_be_renamed_prioritised_and_added():
     # and another database starts from the defaults
     CityHall(DB(":memory:"), Config())
     assert BUILDINGS["media"].name != "مدیا" and "c1" not in BUILDINGS
+
+
+def test_running_businesses_start_tall_and_tasks_move_to_their_product():
+    db = DB(":memory:")
+    city = CityHall(db, Config())
+    floors = city.floors()
+    assert floors["retail"] == 10 and floors["technician"] == 4 and floors["tradebot"] == 3 and floors["smarto"] == 0
+    # an old Retail OS task living in the Crocs building moves to Retail OS once
+    db.set_state("districts_v1", "")
+    tid = db.add_task("ساخت ربات موجودی تلگرام برای شعبه‌ها", "retail", board="construction").id
+    other = db.add_task("چک موجودی شعبه رشت", "retail", board="today").id
+    CityHall(db, Config())
+    assert db.get_task(tid).building == "retailos" and db.get_task(other).building == "retail"
+    state = city.city_state(datetime(2026, 11, 11, 10, tzinfo=ZoneInfo("UTC")))
+    by = {b["key"]: b for b in state["buildings"]}
+    assert by["retailos"]["district"] == "tech" and "retail" in by["retailos"]["bridges"]
+    assert {d["key"] for d in state["districts"]} >= {"downtown", "tech", "support", "center", "personal", "future"}
+    city.update_building("tradebot", district="tech")
+    assert city.city_state(datetime(2026, 11, 11, 10, tzinfo=ZoneInfo("UTC")))["buildings"][0]  # still builds
+    from ocity.buildings import BUILDINGS
+    assert BUILDINGS["tradebot"].district == "tech" and BUILDINGS["tradebot"].base == 3
