@@ -124,6 +124,9 @@ each other. Running businesses start with the floors they already have. The Buil
 building by district; there you can rename it, change its emoji or district, star it, or add a new one. Setup on a Windows server:
 `docs/mini-app.md`.
 
+The same page works as a website on your own subdomain (`SITE_URL`): you log in with a one-time link
+the bot sends you in Telegram, and `/logout` signs every browser out. See `docs/mini-app.md`.
+
 ## Not in this version yet
 
 - Voice messages (needs a speech-to-text service).

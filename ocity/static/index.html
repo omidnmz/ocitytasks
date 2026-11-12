@@ -280,10 +280,10 @@ const rnd = (seed) => { const x = Math.sin(seed * 999.7) * 10000; return x - Mat
 async function api(path, body) {
   const r = await fetch(path, {
     method: body ? "POST" : "GET",
-    headers: { "Content-Type": "application/json", "X-Init-Data": tg ? tg.initData : "" },
+    headers: { "Content-Type": "application/json", "X-Init-Data": tg ? tg.initData : "", "X-OCity": "1" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (r.status === 403) throw new Error("forbidden");
+  if (r.status === 403) { const j = await r.json().catch(() => ({})); throw new Error(j.login ? "login" : "forbidden"); }
   if (!r.ok) throw new Error("http " + r.status);
   return r.json();
 }
@@ -297,9 +297,18 @@ async function load() {
   try { S = await api("/api/state"); }
   catch (e) {
     if (S) return;  // a refresh that failed: keep what's on screen
-    document.querySelector("main").innerHTML = e.message === "forbidden"
+    document.querySelector("main").innerHTML = e.message === "login"
+      ? `<div class="err">🏙 شهر OCity<br><br>برای ورود، ربات شهرداری یه لینک یک‌بارمصرف توی تلگرام برات می‌فرسته.
+          <br><br><button class="b main" id="login">🔐 ورود با تلگرام</button></div>`
+      : e.message === "forbidden"
       ? '<div class="err">این شهر فقط از داخل ربات شهرداری و برای شهردار باز می‌شه.</div>'
       : '<div class="err">به ربات وصل نشدم. یه بار ببند و دوباره باز کن.</div>';
+    const btn = $("login");
+    if (btn) btn.onclick = async () => {
+      btn.disabled = true;
+      const r = await fetch("/auth/request", { method: "POST" }).then((x) => x.json()).catch(() => ({}));
+      btn.outerHTML = `<div>${esc(r.message || "نشد؛ چند لحظه بعد دوباره امتحان کن.")}</div>`;
+    };
     return;
   }
   render();
