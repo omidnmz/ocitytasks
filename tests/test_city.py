@@ -500,3 +500,20 @@ def test_city_hall_grows_with_each_day_the_mayor_shows_up():
     city = CityHall(DB(":memory:"), Config())
     city.seen(at(12, 9)); city.seen(at(12, 15)); city.seen(at(13, 9))
     assert city.floors()["cityhall"] == 2 and "cityhall" in city.lit_buildings(at(13, 10))
+
+
+def test_old_content_plan_tasks_go_once_but_the_new_line_stays():
+    db = DB(":memory:")
+    city = CityHall(db, Config())
+    db.set_state("pipeline_v2", "")  # a city that updated before this cleanup existed
+    old = city.add("انتشار ریل: سایز (Crocs)", "media", now=at(10, 9), kind="publish")
+    old_film = city.add("ضبط: سایز", "media", now=at(10, 9), kind="filming")
+    new = city.add("انتشار ریل: سه رنگ", "media", now=at(10, 9), kind="publish", brand="retail")
+    note = city.add("خرید رینگ لایت", "media", now=at(10, 9))
+    CityHall(db, Config())
+    still_open = {t.id for t in db.open_tasks()}
+    assert old.id not in still_open and old_film.id not in still_open
+    assert {new.id, note.id} <= still_open
+    again = city.add("انتشار پست: تخفیف", "media", now=at(11, 9), kind="publish")
+    CityHall(db, Config())
+    assert again.id in {t.id for t in db.open_tasks()}

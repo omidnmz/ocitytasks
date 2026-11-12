@@ -102,6 +102,7 @@ class CityHall:
         self.load_buildings()
         self.move_into_districts()
         self.start_pipeline()
+        self.drop_old_content_plan()
 
     # --- the Mayor's own building settings --------------------------------
     def building_settings(self) -> dict[str, dict]:
@@ -148,6 +149,23 @@ class CityHall:
         if self.db.get_state("seeded"):
             self.ensure_marketing_tasks(now)
         self.db.set_state("pipeline_v1", "1")
+
+    OLD_CONTENT_KINDS = ("publish", "filming", "editing", "content_prep")
+
+    def drop_old_content_plan(self) -> int:
+        """Once: the reels and posts from the old monthly content plan go. The weekly marketing plans
+        replace them, and every task the new line makes carries its brand, so these are the ones without."""
+        if self.db.get_state("pipeline_v2"):
+            return 0
+        now = datetime.now(self.tz)
+        n = 0
+        for t in self.db.open_tasks():
+            if t.building == "media" and t.kind in self.OLD_CONTENT_KINDS and not t.brand:
+                self.db.update_task(t.id, status="dropped")
+                self.db.log(t.id, "dropped", now=now, reason="old content plan")
+                n += 1
+        self.db.set_state("pipeline_v2", "1")
+        return n
 
     def update_building(self, key: str, name: str | None = None, emoji: str | None = None,
                         priority: bool | None = None, district: str | None = None) -> None:
