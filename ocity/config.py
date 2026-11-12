@@ -69,6 +69,7 @@ class Config:
     db_path: str = "data/ocity.db"
     # Mini App: the public https address Telegram opens, and where the bot's web server listens
     webapp_url: str = ""
+    site_url: str = ""  # the same city as a plain website, e.g. https://city.modiret.ir (login by Telegram link)
     web_host: str = "127.0.0.1"
     web_port: int = 8080
 
@@ -116,6 +117,7 @@ def load() -> Config:
         building_priority=_parse_list(env("BUILDING_PRIORITY", "media,retail,smarto,marketing")),
         db_path=env("DB_PATH", "data/ocity.db"),
         webapp_url=env("WEBAPP_URL", "").strip().rstrip("/"),
+        site_url=env("SITE_URL", "").strip().rstrip("/"),
         web_host=env("WEB_HOST", "127.0.0.1"),
         web_port=int(env("WEB_PORT", "8080") or 8080),
     )

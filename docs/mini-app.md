@@ -69,3 +69,27 @@ subdomain such as `city.example.com`.
 
 The bot sends a message with a «🏙 باز کردن شهر» button, and the menu button next to the
 chat box opens the city too. Without `WEBAPP_URL` the bot runs exactly as before.
+
+
+## The city as a website (your own subdomain)
+
+The same page also opens in any browser, for example at `https://city.modiret.ir`.
+
+1. In your domain's DNS panel add an **A** record: name `city`, value `46.249.98.106`
+   (if the DNS is on ArvanCloud or Cloudflare, turn the proxy off so Caddy can get the certificate).
+   Check from the server with `nslookup city.modiret.ir`.
+2. Add to the end of the Caddyfile (next to the sslip.io block, which the Mini App keeps using):
+
+   ```
+   city.modiret.ir {
+       reverse_proxy 127.0.0.1:8080
+   }
+   ```
+
+   Restart Caddy: `C:\tools\nssm.exe restart caddy`.
+3. Add `SITE_URL=https://city.modiret.ir` to `C:\ocitytasks\.env` and restart the bot.
+
+Open the address, press «ورود با تلگرام», and the bot sends you a one-time button (10 minutes, one use).
+The browser then stays logged in for 30 days. `/logout` in the bot signs every browser out.
+Reminders still come from Telegram. Optionally point `WEBAPP_URL` at the new address too, so the
+Mini App and the website are the same address.
