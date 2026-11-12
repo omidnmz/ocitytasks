@@ -543,7 +543,8 @@ class CityHall:
             if key not in BUILDINGS:
                 continue
             meta = json.loads(self.db.get_state(f"plan:{key}") or "{}")
-            out.append(pipeline.prompt(BUILDINGS[key].name, start, start + timedelta(days=6), meta.get("metric", "")))
+            out.append(pipeline.prompt(BUILDINGS[key].name, start, start + timedelta(days=6), meta.get("metric", ""),
+                                       pipeline.REEL_QUOTA.get(key, "۲ تا ۵")))
         return out
 
     def import_marketing_plan(self, text: str, now: datetime) -> Result:
