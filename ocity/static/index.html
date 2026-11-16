@@ -387,7 +387,7 @@ function cityLayout() {
 
 function drawCity() {
   const night = (() => { const hr = new Date().getHours(); return hr < 6 || hr >= 18; })();
-  const w = 56, h = 28, FP = 0.56;
+  const w = 56, h = 28, FP = 0.76;
   const blocks = cityLayout();
   const pt = (c, r) => [(c - r) * w, (c + r) * h];
   const most = Math.max(1, ...S.buildings.map((b) => b.floors));
@@ -460,9 +460,12 @@ function drawCity() {
     for (let c = 1; c < cols; c++) { const [p, q] = [pt(c0 + c - 0.5, r0 - 0.4), pt(c0 + c - 0.5, r0 + rows - 0.6)];
       ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${tint}" stroke-width=".8" stroke-dasharray="3 5" opacity="${night ? .45 : .4}"/>`; }
     ground += `</g>`;
-    bl.box = { x: dx - 20, y: ay - 150, w: bx - dx + 40, h: cy - ay + 190 };
-    for (let i = 0; i < cols * rows; i++)
-      tiles.push({ b: bl.members[i] || null, d: k, c: c0 + (i % cols), r: r0 + Math.floor(i / cols) });
+    bl.box = { x: dx - 20, y: ay - 210, w: bx - dx + 40, h: cy - ay + 250 };
+    // tallest buildings take the back lots and the shortest the front, so no tower hides behind another
+    const cells = Array.from({ length: cols * rows }, (_, i) => [i % cols, Math.floor(i / cols)])
+      .sort((p, q) => (p[0] + p[1]) - (q[0] + q[1]) || p[0] - q[0]);
+    const tall = [...bl.members].sort((p, q) => q.floors - p.floors);
+    cells.forEach(([c, r], i) => tiles.push({ b: tall[i] || null, d: k, c: c0 + c, r: r0 + r }));
     // the district's sign at the front tip of its plaza, on the road
     const nm = `${bl.d.emoji} ${bl.d.name}`, sw = 18 + nm.length * 6.4;
     signs += `<g class="sign" data-d="${k}" transform="translate(${cx},${cy + 15})">
@@ -576,7 +579,7 @@ function drawCity() {
       const spr = !night && SPR[b.key];
       if (spr) {
         // day art: the base, the floor piece once per few floors, then the roof
-        const k = 2 * tw * .84 / 200, X = x - spr.px * k, reps = Math.max(0, Math.round(n * fh * .6 / (spr.s * k)));
+        const k = 2 * tw * .95 / 200, X = x - spr.px * k, reps = Math.max(0, Math.round(n * fh * .6 / (spr.s * k)));
         let top = y - spr.py * k;
         let art = `<image href="/img/${b.key}-b.webp" x="${X}" y="${top}" width="${spr.w * k}" height="${spr.b * k}" preserveAspectRatio="none"/>`;
         for (let i = 0; i < reps; i++) {
