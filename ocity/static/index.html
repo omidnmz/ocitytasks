@@ -46,9 +46,9 @@
   .hero svg.focus [data-d].dim { opacity: .35; }
   .hero .nm { opacity: 0; transition: opacity .3s; pointer-events: none; }
   .hero svg.zoomed .nm { opacity: 1; }
-  .hero .br { opacity: .35; transition: opacity .3s; }
+  .hero .br { opacity: .25; transition: opacity .3s; }
   .hero svg.focus .br { opacity: .1; }
-  .hero svg.focus .br.hot { opacity: .85; stroke-width: 2; }
+  .hero svg.focus .br.hot { opacity: .5; }
   .hero .br { animation: flow 1.4s linear infinite; }
   @keyframes flow { to { stroke-dashoffset: -12; } }
   .zoom-ui { position: absolute; bottom: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; }
@@ -348,7 +348,7 @@ const mix = (a, b, k) => { const p = (x) => [parseInt(x.slice(1, 3), 16), parseI
 let VB0 = null, VB = null, focusD = null;
 const NEONS = ["#22d3ee", "#e879f9", "#f472b6", "#a78bfa", "#facc15"];
 // building looks: a twisting terrace tower for the flagship, glass towers for the rest, low blocks while small
-const STYLE = { retail: "terrace" };
+const STYLE = { retail: "terrace", media: "ring" };
 const bstyle = (b) => b.floors < 4 ? "block" : (STYLE[b.key] || (b.floors >= 4 ? "glass" : "block"));
 
 function cityLayout() {
@@ -473,10 +473,28 @@ function drawCity() {
     tiles.push({ filler: true, c: f.c0 - .25 + a * .5, r: f.r0 - .25 + q * .5, h: 14 + Math.floor(rnd(sd + 1) * 5) ** 2 * 3.2, sd });
   }
 
+  if (roads.c.length) {   // an elevated highway over the first avenue
+    const hc = roads.c[0];
+    for (let r = R0 + .5; r < R1 - .2; r += .5) tiles.push({ hw: true, c: hc, r });
+  }
+
   // 2. lots and buildings, back to front
   tiles.sort((p, q) => (p.c + p.r) - (q.c + q.r) || p.c - q.c);
   tiles.forEach((t, idx) => {
     const [x, y] = pt(t.c, t.r), b = t.b, tw = w * FP, th = h * FP;
+    if (t.hw) {   // one piece of the elevated highway, with a pillar under every other piece
+      const HZ = 26, q = [pt(t.c - .3, t.r - .26), pt(t.c + .3, t.r - .26), pt(t.c + .3, t.r + .26), pt(t.c - .3, t.r + .26)].map(([a, b2]) => [a, b2 - HZ]);
+      let f = "";
+      if (Math.abs(t.r - Math.round(t.r)) < .01) f += `<rect x="${x - 2.5}" y="${y - HZ}" width="5" height="${HZ}" fill="${night ? "#1a2238" : "#b8c0cc"}"/><rect x="${x + .5}" y="${y - HZ}" width="2" height="${HZ}" fill="${night ? "#273150" : "#d4d9e1"}"/>`;
+      f += `<polygon points="${q[3]} ${q[2]} ${q[2][0]},${q[2][1] + 4} ${q[3][0]},${q[3][1] + 4}" fill="${night ? "#141a2e" : "#9aa3b2"}"/>
+        <polygon points="${q[1]} ${q[2]} ${q[2][0]},${q[2][1] + 4} ${q[1][0]},${q[1][1] + 4}" fill="${night ? "#1a2238" : "#aeb6c4"}"/>
+        <polygon points="${q.join(" ")}" fill="${night ? "#0b0f1e" : "#6b7385"}"/>
+        <line x1="${q[3][0]}" y1="${q[3][1] + 4}" x2="${q[2][0]}" y2="${q[2][1] + 4}" stroke="${night ? "#f472b6" : "#ef4444"}" stroke-width="1" opacity=".9" ${night ? 'filter="url(#glow)"' : ""}/>`;
+      const [m0, m1] = [pt(t.c, t.r - .26), pt(t.c, t.r + .26)];
+      f += `<line x1="${m0[0]}" y1="${m0[1] - HZ}" x2="${m1[0]}" y2="${m1[1] - HZ}" stroke="${night ? "#facc15" : "#fff"}" stroke-width=".8" stroke-dasharray="3 3"/>`;
+      city += `<g class="hw">${f}</g>`;
+      return;
+    }
     if (t.filler) {   // a background tower: no task lives here, it only fills the skyline
       const fw = tw * .42, fth = th * .42, H = t.h, ac = NEONS[t.sd % NEONS.length];
       const L = night ? "#080c1a" : "#8692a8", R = night ? "#0e1428" : "#a3adc0", Tp = night ? "#1a2238" : "#c3cad7";
@@ -503,11 +521,14 @@ function drawCity() {
           <line x1="${x}" y1="${y}" x2="${x}" y2="${y - 10}" stroke="#bae6fd" stroke-width="2"><animate attributeName="y2" values="${y - 6};${y - 12};${y - 6}" dur="1.8s" repeatCount="indefinite"/></line></g>`;
       } else {   // a little park
         city += `<g data-d="${t.d}"><polygon points="${lot(.74)}" fill="url(#grass)" opacity=".95"/>`;
-        for (const [ox, oy, s] of [[-14, -2, .9], [13, 1, .8], [0, 8, .85]])
-          city += `<ellipse cx="${x + ox + 4}" cy="${y + oy + 1}" rx="${7 * s}" ry="${3 * s}" fill="#000" opacity=".18"/>
-            <rect x="${x + ox - 1.2}" y="${y + oy - 8 * s}" width="2.4" height="${8 * s}" rx="1" fill="#7c4a1e"/>
-            <circle cx="${x + ox}" cy="${y + oy - 12 * s}" r="${7.5 * s}" fill="#15803d"/>
-            <circle cx="${x + ox - 2.2 * s}" cy="${y + oy - 14 * s}" r="${4.4 * s}" fill="#4ade80" opacity=".8"/>`;
+        for (const [ox, oy, s] of [[-14, -2, .9], [13, 1, .8], [0, 8, 1]]) {   // palms
+          const tx = x + ox, ty = y + oy, top = ty - 22 * s, lean = 3 * s;
+          city += `<ellipse cx="${tx + 5}" cy="${ty + 1}" rx="${8 * s}" ry="${3 * s}" fill="#000" opacity=".2"/>
+            <path d="M${tx},${ty} Q${tx + lean * .2},${ty - 12 * s} ${tx + lean},${top}" stroke="${night ? "#6b4f3a" : "#8b6b4a"}" stroke-width="${2 * s}" fill="none" stroke-linecap="round"/>`;
+          for (const [dx2, dy2] of [[-9, 2], [-6, -4], [0, -6], [6, -4], [9, 2], [-3, 4], [4, 4]])
+            city += `<path d="M${tx + lean},${top} q${dx2 * .5 * s},${(dy2 - 4) * s} ${dx2 * s},${dy2 * s}" stroke="${night ? "#16a34a" : "#22c55e"}" stroke-width="${1.6 * s}" fill="none" stroke-linecap="round"/>`;
+          if (night) city += `<circle cx="${tx}" cy="${ty - 1}" r="1.2" fill="#22d3ee" filter="url(#glow)"/>`;
+        }
         city += `</g>`;
       }
       return;
@@ -518,6 +539,7 @@ function drawCity() {
       <linearGradient id="T${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${shade(c, 1.35)}"/><stop offset="1" stop-color="${shade(c, 1.08)}"/></linearGradient>`;
     let g = `<polygon points="${lot(.78)}" fill="${night ? "#0a0f1f" : "#e2e6ee"}" stroke="${c}" stroke-opacity="${night ? .5 : .35}" stroke-width=".8"/>`;
     let labelY, H;
+    const style0 = b.floors ? bstyle(b) : "plot";
     if (b.floors === 0) {
       H = 30;
       g += `<g stroke="#38bdf8" stroke-width="1.2" fill="rgba(56,189,248,.10)" stroke-dasharray="4 3" filter="url(#glow)">
@@ -550,7 +572,7 @@ function drawCity() {
       const ring = (z, k, col, wdt = 1) => `<polyline points="${x - tw * k},${y - z} ${x},${y + th * k - z} ${x + tw * k},${y - z}" fill="none" stroke="${col}" stroke-width="${wdt}" ${glowIf}/>`;
       if (style === "terrace") {
         // the flagship: a twisting stack of dark slabs around a glass core, each slab edged in neon
-        const core = mix("#060914", c, .22), coreR = mix("#101833", c, .3);
+        const core = night ? mix("#060914", c, .22) : mix("#3d5a80", c, .25), coreR = night ? mix("#101833", c, .3) : mix("#5b7ba6", c, .25);
         for (let i = 0; i < n; i++) {
           const z0 = 8 + i * fh, z1 = z0 + fh, wob = Math.sin(i * .55) * 3.2, wide = 1 + .1 * Math.sin(i * .8 + 1);
           g += box(tw * .72, th * .72, z0, z1, core, coreR, core, wob * .4);
@@ -559,56 +581,91 @@ function drawCity() {
             g += `<polygon points="${x - tw * .68 + wob * .4},${y - z0 - 1.5} ${x + wob * .4},${y + th * .68 - z0 - 1.5} ${x + wob * .4},${y + th * .68 - z1 + 1.5} ${x - tw * .68 + wob * .4},${y - z1 + 1.5}" fill="${on ? winCol(i, 0) : "#0b1022"}" opacity="${night ? (on ? .75 : .7) : .35}"/>
               <polygon points="${x + wob * .4},${y + th * .68 - z0 - 1.5} ${x + tw * .68 + wob * .4},${y - z0 - 1.5} ${x + tw * .68 + wob * .4},${y - z1 + 1.5} ${x + wob * .4},${y + th * .68 - z1 + 1.5}" fill="${on2 ? winCol(i, 1) : "#0b1022"}" opacity="${night ? (on2 ? .65 : .7) : .3}"/>`;
           }
-          g += box(tw * wide, th * wide, z1 - 1.6, z1, night ? "#1a2238" : "#475569", night ? "#232d48" : "#64748b", night ? "#2a3552" : "#94a3b8", wob);
+          g += box(tw * wide, th * wide, z1 - 1.6, z1, night ? "#1a2238" : "#d6d0c6", night ? "#232d48" : "#ece7df", night ? "#2a3552" : "#faf8f4", wob);
           g += `<polyline points="${x - tw * wide + wob},${y - z1 + .8} ${x + wob},${y + th * wide - z1 + .8} ${x + tw * wide + wob},${y - z1 + .8}" fill="none" stroke="${neon}" stroke-width="${i % 4 === 3 ? 1.4 : .8}" opacity="${i % 4 === 3 ? 1 : .7}" ${glowIf}/>`;
         }
         g += box(tw * .5, th * .5, H, H + 5, mix("#0b1022", c, .3), mix("#1e293b", c, .4), neon);
-      } else if (style === "glass") {
-        // a neon spire: a dark tower that steps back twice, ringed with light bands, a holo sign and a billboard
-        const L = night ? mix("#070b18", c, .14) : mix("#2b3446", c, .22), R = night ? mix("#0e1530", c, .22) : mix("#3c4760", c, .3);
-        const Tp = mix("#1e293b", c, .45);
-        const s1 = n >= 9 ? 8 + Math.round(n * .62) * fh : H, s2 = n >= 15 ? 8 + Math.round(n * .86) * fh : H;
-        const kAt = (z) => z < s1 ? 1 : z < s2 ? .78 : .58;
-        g += box(tw, th, 0, s1, L, R, Tp);
-        if (s1 < H) g += box(tw * .78, th * .78, s1, s2, L, R, Tp);
-        if (s2 < H) g += box(tw * .58, th * .58, s2, H, L, R, Tp);
-        // a sheen down the right face
-        g += `<polygon points="${panel(onR, .12, .38, 0, s1)}" fill="#fff" opacity="${night ? .03 : .1}"/>`;
-        // windows: little lit cells, a different color per office
-        if (fh >= 4) for (let i = 0; i < n; i++) {
-          const z = 8 + i * fh + fh * .3, k = kAt(z);
-          for (let j = 0; j < 6; j++) {
-            if (!winOn(i, j)) continue;
-            const u = ((j % 3) + .5) / 3, [wx, wy] = (j < 3 ? onL : onR)(u, z, k);
-            g += `<rect x="${wx - 1.5}" y="${wy - Math.max(1.4, fh * .32)}" width="3" height="${Math.max(1.4, fh * .32)}" fill="${winCol(i, j)}" opacity="${night ? .9 : .4}"/>`;
+      } else if (style === "ring") {
+        // a round tower wrapped in rings of screens, like a media mast
+        const rx = tw * .82, ry = th * .82;
+        defs += `<linearGradient id="cy${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${night ? "#0a1020" : "#5b6b84"}"/><stop offset=".55" stop-color="${night ? mix("#16203d", c, .3) : mix("#dfe5ee", c, .15)}"/><stop offset="1" stop-color="${night ? "#070b16" : "#7d8aa0"}"/></linearGradient>
+          <linearGradient id="sc${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${c}"/><stop offset=".5" stop-color="#ec4899"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>`;
+        const seg = (z0, z1, k, fill) => `<path d="M${x - rx * k},${y - z0} A${rx * k} ${ry * k} 0 0 0 ${x + rx * k},${y - z0} L${x + rx * k},${y - z1} A${rx * k} ${ry * k} 0 0 1 ${x - rx * k},${y - z1} Z" fill="${fill}"/>`;
+        g += seg(0, H, .8, `url(#cy${id})`);
+        for (let i = 0; i < n; i++) {
+          const z0 = 8 + i * fh, k = i % 3 === 2 ? 1.12 : .8;
+          if (i % 3 === 2) {   // a ring of screens
+            g += seg(z0, z0 + fh * .9, k, `url(#sc${id})`);
+            g += `<ellipse cx="${x}" cy="${y - z0 - fh * .9}" rx="${rx * k}" ry="${ry * k}" fill="none" stroke="${neon}" stroke-width="1.1" ${glowIf}/>`;
+            for (let q = 0; q < 5; q++) g += `<line x1="${x - rx * k * .8 + q * rx * k * .4}" y1="${y - z0 + ry * k * .6 * Math.sin((q / 4) * Math.PI) - 1}" x2="${x - rx * k * .8 + q * rx * k * .4}" y2="${y - z0 - fh * .9 + ry * k * .6 * Math.sin((q / 4) * Math.PI) + 1}" stroke="#000" stroke-width=".6" opacity=".35"/>`;
+          } else if (night && winOn(i, 0)) {
+            g += `<path d="M${x - rx * .7},${y - z0 - fh * .5} A${rx * .7} ${ry * .7} 0 0 0 ${x + rx * .7},${y - z0 - fh * .5}" fill="none" stroke="${winCol(i, 0)}" stroke-width="1.4" stroke-dasharray="2 2" opacity=".85"/>`;
           }
         }
-        // light bands every few floors and on each setback, the front edge in neon
-        for (let i = 3; i < n; i += 4) { const z = 8 + i * fh; g += ring(z, kAt(z), neon, .8); }
-        for (const [z0, z1, k] of [[0, s1, 1], [s1, s2, .78], [s2, H, .58]]) if (z1 > z0) {
-          g += `<line x1="${x}" y1="${y + th * k - z0}" x2="${x}" y2="${y + th * k - z1}" stroke="${neon}" stroke-width="${night ? 1.6 : 1.2}" ${glowIf}/>`;
-          g += ring(z1, k, neon, 1.3);
-        }
-        // a vertical holo sign on the left face
-        if (n >= 6) {
-          const za = s1 * .3, zb = s1 * .82;
-          g += `<polygon points="${panel(onL, .12, .3, za, zb)}" fill="${c}" opacity="${night ? (lit ? .9 : .45) : .75}" ${glowIf}/>`;
-          for (let q = 0; q < 5; q++) { const z = za + (zb - za) * (q + .5) / 5, [p0, p1] = [onL(.16, z), onL(.26, z)];
-            g += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="#fff" stroke-width="1.2" opacity=".75"/>`; }
-        }
-        // a big tower carries a billboard on its right face
-        if (n >= 12) {
-          const zb = s1 * .55, za = zb - Math.min(26, s1 * .22);
-          defs += `<linearGradient id="B${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c}"/><stop offset=".55" stop-color="#ec4899"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>`;
-          g += `<polygon points="${panel(onR, .18, .86, za, zb)}" fill="url(#B${id})" opacity="${night ? .92 : .85}" ${night ? 'filter="url(#glow)"' : ""}>
-            <animate attributeName="opacity" values="${night ? ".92;.6;.92;.92" : ".85;.7;.85;.85"}" dur="4s" repeatCount="indefinite"/></polygon>`;
-          for (let q = 1; q < 4; q++) { const z = za + (zb - za) * q / 4, [p0, p1] = [onR(.24, z), onR(.8, z)];
-            g += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="#fff" stroke-width=".5" opacity=".35"/>`; }
-        }
+        g += `<ellipse cx="${x}" cy="${y - H}" rx="${rx * .8}" ry="${ry * .8}" fill="${night ? mix("#1e293b", c, .35) : mix("#e2e8f0", c, .25)}" stroke="${neon}" stroke-width="1" ${glowIf}/>`;
+      } else if (style === "glass") {
+        // a megablock: a light frame with colored panels, an outside skeleton, louvers, vertical signs and stacked billboards
+        const body = night ? ["#0c1222", "#141c33", "#1d2742"] : ["#d9d4cb", "#ece8e1", "#f6f3ee"];
+        const acc = night ? [mix("#0c1222", c, .55), mix("#141c33", c, .6)] : [shade(c, .85), shade(c, 1)];
+        const glass = night ? "#0a1a33" : "#5f86b8", glassR = night ? "#0e2244" : "#7ea3cf";
+        const s1 = n >= 9 ? 8 + Math.round(n * .58) * fh : H, s2 = n >= 15 ? 8 + Math.round(n * .84) * fh : H;
+        const segs = [[0, s1, 1], [s1, s2, .8], [s2, H, .62]].filter(([a, b]) => b > a);
+        const SIGN = [c, "#ec4899", "#22d3ee", "#facc15", "#a78bfa"];
+        segs.forEach(([z0, z1, k], si) => {
+          g += box(tw * k, th * k, z0, z1, body[0], body[1], body[2]);
+          const hgt = z1 - z0;
+          // left face: a colored panel at the back, glass curtain in the middle, the skeleton at the front corner
+          g += `<polygon points="${panel(onL, 0, .24, z0 + 2, z1 - 2, k)}" fill="${acc[0]}"/>
+            <polygon points="${panel(onL, .3, .9, z0 + 3, z1 - 3, k)}" fill="${glass}" opacity="${night ? 1 : .9}"/>
+            <polygon points="${panel(onL, .92, 1, z0, z1, k)}" fill="${night ? "#2a3552" : "#fff"}"/>`;
+          // right face: louvers over most of it, a colored panel at the back
+          g += `<polygon points="${panel(onR, .62, 1, z0 + 2, z1 - 2, k)}" fill="${acc[1]}"/>
+            <polygon points="${panel(onR, .06, .58, z0 + 3, z1 - 3, k)}" fill="${glassR}" opacity="${night ? 1 : .85}"/>`;
+          for (let z = z0 + 5; z < z1 - 3; z += 3) { const [p0, p1] = [onR(.06, z, k), onR(.58, z, k)];
+            g += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="${night ? "#000" : "#fff"}" stroke-width=".7" opacity="${night ? .45 : .55}"/>`; }
+          // window cells in the glass, lit at night
+          for (let i = 0; i * fh < hgt - 6; i++) for (let j = 0; j < 4; j++) {
+            const z = z0 + 6 + i * fh, u = .34 + j * .14;
+            if (z > z1 - 4) break;
+            const [wx, wy] = onL(u, z, k), lit2 = winOn(i + si * 40, j);
+            g += `<rect x="${wx - 1.6}" y="${wy - Math.max(1.6, fh * .45)}" width="3.2" height="${Math.max(1.6, fh * .45)}" fill="${night ? (lit2 ? winCol(i, j) : "#06101f") : "#cfe3fa"}" opacity="${night ? .9 : .55}"/>`;
+          }
+          // the skeleton: corner columns and, on the big base, cross bracing over the glass
+          for (const u of [.3, .9]) { const [a0, a1] = [onL(u, z0, k), onL(u, z1, k)];
+            g += `<line x1="${a0[0]}" y1="${a0[1]}" x2="${a1[0]}" y2="${a1[1]}" stroke="${night ? "#3a4768" : "#fff"}" stroke-width="1.4"/>`; }
+          if (si === 0 && hgt > 60) for (let z = z0 + 6; z + 30 < z1; z += 34) {
+            const [a, b2, cc, d] = [onL(.3, z, k), onL(.9, z + 30, k), onL(.9, z, k), onL(.3, z + 30, k)];
+            g += `<path d="M${a} L${b2} M${cc} L${d}" stroke="${night ? "#3a4768" : "#fff"}" stroke-width=".9" opacity=".85"/>`;
+          }
+          // an overhanging slab on top of each section, edged in neon
+          g += box(tw * k * 1.1, th * k * 1.1, z1, z1 + 2.5, body[1], body[2], body[2]) + ring(z1 + 2.5, k * 1.1, neon, 1.2);
+          // a vertical sign on the colored panel, ticks for its letters
+          if (hgt > 40) {
+            const za = z0 + hgt * .18, zb = z1 - hgt * .12, col = SIGN[(si + idx) % SIGN.length];
+            g += `<polygon points="${panel(onL, .04, .2, za, zb, k)}" fill="${night ? "#05070f" : "#1e293b"}" stroke="${col}" stroke-width="1" ${night ? 'filter="url(#glow)"' : ""}/>`;
+            for (let q = za + 4; q < zb - 3; q += 6) { const [p0, p1] = [onL(.08, q, k), onL(.16, q, k)];
+              g += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="${col}" stroke-width="1.6" opacity="${night ? .95 : .85}"/>`; }
+          }
+          // billboards on the right face
+          if (hgt > 34) for (let q = 0; q < Math.min(3, Math.floor(hgt / 34)); q++) {
+            const zb = z1 - 6 - q * 30, za = zb - 18, col = SIGN[(idx + q * 2 + si) % SIGN.length], col2 = SIGN[(idx + q * 2 + si + 1) % SIGN.length];
+            const gid = `bb${id}${si}${q}`;
+            defs += `<linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${col}"/><stop offset="1" stop-color="${col2}"/></linearGradient>`;
+            g += `<polygon points="${panel(onR, .1, .54, za, zb, k)}" fill="url(#${gid})" opacity="${night ? .95 : .9}" ${night && q === 0 ? 'filter="url(#glow)"' : ""}>${q === 0 ? `<animate attributeName="opacity" values="1;.65;1;1;1" dur="${3 + idx % 3}s" repeatCount="indefinite"/>` : ""}</polygon>`;
+            const [t0, t1] = [onR(.16, za + 6, k), onR(.4, za + 6, k)], [t2, t3] = [onR(.16, za + 11, k), onR(.48, za + 11, k)];
+            g += `<path d="M${t0} L${t1} M${t2} L${t3}" stroke="#fff" stroke-width="1.3" opacity=".8"/>`;
+          }
+        });
+        // the front edge in neon
+        g += `<line x1="${x}" y1="${y + th}" x2="${x}" y2="${y + th - s1}" stroke="${neon}" stroke-width="${night ? 1.4 : 1}" ${glowIf}/>`;
+        // a roof full of kit: a water tank, units and a mast
+        const kTop = segs[segs.length - 1][2], rz = H + 2.5;
+        g += box(tw * kTop * .3, th * kTop * .3, rz, rz + 5, night ? "#1e293b" : "#94a3b8", night ? "#334155" : "#cbd5e1", night ? "#475569" : "#e2e8f0", -tw * kTop * .35)
+          + `<rect x="${x + tw * kTop * .15}" y="${y - rz - 9}" width="7" height="8" fill="${night ? "#334155" : "#a8a29e"}"/><ellipse cx="${x + tw * kTop * .15 + 3.5}" cy="${y - rz - 9}" rx="3.5" ry="1.6" fill="${night ? "#475569" : "#d6d3d1"}"/>`;
       } else {
         // a low block: dark with a neon roofline and a lit shopfront
-        const L = night ? mix("#0b1022", c, .25) : mix("#475569", c, .25), R = night ? mix("#141c36", c, .3) : mix("#5b6b84", c, .28);
-        const Tp = night ? mix("#1e293b", c, .3) : mix("#94a3b8", c, .25);
+        const L = night ? mix("#0b1022", c, .25) : mix("#c9beb0", c, .3), R = night ? mix("#141c36", c, .3) : mix("#e2dad0", c, .25);
+        const Tp = night ? mix("#1e293b", c, .3) : mix("#f3efe9", c, .15);
         g += box(tw, th, 0, H, L, R, Tp);
         for (let i = 0; i < n; i++) {
           const z0 = 8 + i * fh + fh * .25, z1 = z0 + fh * .45, on = winOn(i, 0), on2 = winOn(i, 1);
@@ -616,6 +673,9 @@ function drawCity() {
             <polygon points="${panel(onR, .08, .92, z0, z1)}" fill="${on2 ? winCol(i, 1) : "#0b1022"}" opacity="${night ? .8 : .3}"/>`;
         }
         g += `<polygon points="${panel(onR, .12, .88, 1, 6)}" fill="${neon}" opacity="${night ? .85 : .7}" ${glowIf}/>`;
+        // a shop sign standing on the roof
+        g += `<polygon points="${panel(onL, .2, .75, H + 1, H + 10)}" fill="${night ? "#05070f" : "#1e293b"}" stroke="${["#ec4899", "#22d3ee", "#facc15"][idx % 3]}" stroke-width="1" ${night ? 'filter="url(#glow)"' : ""}/>`;
+        { const [p0, p1] = [onL(.28, H + 5.5), onL(.66, H + 5.5)]; g += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="${["#ec4899", "#22d3ee", "#facc15"][idx % 3]}" stroke-width="2" opacity=".9"/>`; }
         g += ring(H, 1, neon, 1.3);
         g += box(tw * .28, th * .28, H, H + 4, night ? "#1e293b" : "#64748b", night ? "#334155" : "#94a3b8", night ? "#475569" : "#cbd5e1", -tw * .3)
           + box(tw * .2, th * .2, H, H + 3, night ? "#1e293b" : "#64748b", night ? "#334155" : "#94a3b8", night ? "#475569" : "#cbd5e1", tw * .35);
@@ -643,17 +703,21 @@ function drawCity() {
         labelY = Math.min(labelY, my - 54);
       }
     }
-    // label: emoji and floors from afar, the building's name too once zoomed in
-    const short = `${b.overdue ? "⚠️" : ""}${b.emoji}${b.floors ? " " + fa(b.floors) : ""}`;
-    const lw = 28 + (b.floors ? String(b.floors).length * 7 : 0) + (b.priority ? 9 : 0) + (b.overdue ? 13 : 0);
+    // the building's logo, mounted on its own front corner like a lit sign; its floors on a little tab beside it
+    const bg = night ? "rgba(8,10,25,.88)" : "rgba(255,255,255,.95)", fg = night ? "#fff" : "#0f172a";
+    const front = style0 === "ring" ? th * .66 : th;
+    const lx = x, ly = y + front - H + (H > 40 ? 16 : 11), R = H > 40 ? 10 : 8;
     const name = esc(b.name.length > 16 ? b.name.slice(0, 15) + "…" : b.name), nw = 16 + b.name.slice(0, 16).length * 4.6;
-    const bg = night ? "rgba(15,23,42,.65)" : "rgba(255,255,255,.8)", fg = night ? "#fff" : "#0f172a";
-    g += `<g transform="translate(${x},${labelY})">
-      <rect x="${-lw / 2}" y="-13" width="${lw}" height="20" rx="10" fill="${bg}" stroke="${night ? "rgba(255,255,255,.25)" : "#fff"}"/>
-      <text x="${b.priority ? 3 : 0}" y="1.5" font-size="11" font-weight="700" fill="${fg}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${short}</text>
-      ${b.priority ? `<circle cx="${lw / 2 - 7}" cy="-3" r="3.2" fill="#fbbf24" stroke="#fff" stroke-width="1"/>` : ""}
-      <g class="nm"><rect x="${-nw / 2}" y="9" width="${nw}" height="13" rx="6.5" fill="${bg}"/>
-        <text y="18.5" font-size="7.5" font-weight="700" fill="${fg}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${name}</text></g></g>`;
+    g += `<g transform="translate(${lx},${ly})">
+      <circle r="${R + 1.5}" fill="none" stroke="${b.overdue ? "#f59e0b" : c}" stroke-width="1.4" opacity=".9" ${night ? 'filter="url(#glow)"' : ""}/>
+      <circle r="${R}" fill="${bg}"/>
+      <text y="${R * .38}" font-size="${R * 1.1}" text-anchor="middle">${b.emoji}</text>
+      ${b.floors ? `<g transform="translate(${R + 3},${-R * .2})"><rect x="0" y="-6" width="${8 + String(b.floors).length * 5}" height="11" rx="3" fill="${c}"/>
+        <text x="${4 + String(b.floors).length * 2.5}" y="2.5" font-size="8" font-weight="800" fill="#fff" text-anchor="middle" font-family="Vazirmatn, Tahoma">${fa(b.floors)}</text></g>` : ""}
+      ${b.priority ? `<circle cx="${-R * .75}" cy="${-R * .75}" r="2.8" fill="#fbbf24" stroke="#fff" stroke-width=".8"/>` : ""}
+      ${b.overdue ? `<text x="${-R - 6}" y="3" font-size="8" text-anchor="middle">⚠️</text>` : ""}</g>
+      <g class="nm" transform="translate(${x},${labelY + 8})"><rect x="${-nw / 2}" y="-9" width="${nw}" height="13" rx="6.5" fill="${bg}" stroke="${c}" stroke-width=".6"/>
+        <text y="0.5" font-size="7.5" font-weight="700" fill="${fg}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${name}</text></g>`;
     grow(x, labelY - 16);
     spots[b.key] = { x, y: y - H * 0.75, d: t.d };
     city += `<g class="bld" data-b="${b.key}" data-d="${t.d}">${g}</g>`;
