@@ -37,8 +37,8 @@
 
   /* hero city */
   .hero { position: relative; border-radius: 24px; overflow: hidden; box-shadow: var(--shadow); margin: 0 -10px;
-    background: linear-gradient(180deg, #5b8def 0%, #a78bfa 55%, #fbcfe8 100%); }
-  .hero.night { background: linear-gradient(180deg, #070b1d 0%, #1e1b4b 58%, #5b21b6 100%); }
+    background: linear-gradient(180deg, #7aa7f5 0%, #b9b4f8 50%, #f5c6e3 100%); }
+  .hero.night { background: linear-gradient(180deg, #03040c 0%, #120a2e 50%, #3b0a5c 82%, #7e1d6b 100%); }
   .hero svg.map { display: block; width: 100%; height: auto; position: relative; touch-action: pan-y; }
   .hero svg.sky { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .hero .isl, .hero .sign { cursor: pointer; }
@@ -339,13 +339,14 @@ function render() {
   badge.hidden = !late; badge.textContent = fa(late);
 }
 
-/* ---------- the city: floating district islands, zoomable ---------- */
+/* ---------- the city: district plazas on one big ground, roads between, zoomable ---------- */
 // where each district sits, in district blocks (column, row) of the isometric grid
 const LAYOUT = { downtown: [0, 0], tech: [1, 0], support: [0, 1], center: [1, 1], personal: [2, 1], future: [1, 2] };
 const TINT = { downtown: "#f59e0b", tech: "#6366f1", support: "#a855f7", center: "#d4a373", personal: "#22c55e", future: "#14b8a6" };
 const mix = (a, b, k) => { const p = (x) => [parseInt(x.slice(1, 3), 16), parseInt(x.slice(3, 5), 16), parseInt(x.slice(5, 7), 16)];
   const A = p(a), B = p(b); return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, "0")).join(""); };
 let VB0 = null, VB = null, focusD = null;
+const NEONS = ["#22d3ee", "#e879f9", "#f472b6", "#a78bfa", "#facc15"];
 // building looks: a twisting terrace tower for the flagship, glass towers for the rest, low blocks while small
 const STYLE = { retail: "terrace" };
 const bstyle = (b) => b.floors < 4 ? "block" : (STYLE[b.key] || (b.floors >= 4 ? "glass" : "block"));
@@ -358,7 +359,7 @@ function cityLayout() {
     blocks[d.key] = { d, members, cols, rows };
   }
   // columns and rows of blocks get as wide as their widest district, with a gap of sky between islands
-  const GAP = 1.45, colW = {}, rowH = {};
+  const GAP = 1.9, colW = {}, rowH = {};
   for (const [k, bl] of Object.entries(blocks)) {
     const [i, j] = LAYOUT[k] || [2, 2];
     colW[i] = Math.max(colW[i] || 0, bl.cols); rowH[j] = Math.max(rowH[j] || 0, bl.rows);
@@ -369,6 +370,15 @@ function cityLayout() {
     bl.c0 = off(colW, i) + ((colW[i] || bl.cols) - bl.cols) / 2;
     bl.r0 = off(rowH, j) + ((rowH[j] || bl.rows) - bl.rows) / 2;
   }
+  // the avenues run down the middle of each gap between district columns and rows
+  const ends = (sizes) => Object.keys(sizes).map(Number).sort((p, q) => p - q).slice(0, -1).map((i) => off(sizes, i) + sizes[i] - 0.5 + GAP / 2);
+  cityLayout.roads = { c: ends(colW), r: ends(rowH) };
+  // the grid cells no district uses get a filler block of background towers, so the city reads as one big town
+  const used = new Set(Object.keys(blocks).map((k) => String(LAYOUT[k] || [2, 2])));
+  const I = Object.keys(colW).map(Number), J = Object.keys(rowH).map(Number);
+  cityLayout.fill = [];
+  for (const i of I) for (const j of J) if (!used.has(`${i},${j}`))
+    cityLayout.fill.push({ c0: off(colW, i), r0: off(rowH, j), cols: colW[i], rows: rowH[j], seed: i * 7 + j * 13 });
   return blocks;
 }
 
@@ -378,7 +388,7 @@ function drawCity() {
   const blocks = cityLayout();
   const pt = (c, r) => [(c - r) * w, (c + r) * h];
   const most = Math.max(1, ...S.buildings.map((b) => b.floors));
-  const fh = Math.max(3.5, Math.min(10, 170 / most));
+  const fh = Math.max(4, Math.min(12, 220 / most));
   const T = 12;
 
   let defs = `<filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
@@ -393,38 +403,94 @@ function drawCity() {
   const tiles = [], spots = {};
   drawCity.fountain = false;
 
-  // 1. one floating island per district, tinted by what lives there
+  // 1. one big ground for the whole city: each district is a plaza on it, with lit roads in the gaps between
+  const all = Object.values(blocks), roads = cityLayout.roads;
+  const C0 = Math.min(...all.map((b) => b.c0)) - 1.3, C1 = Math.max(...all.map((b) => b.c0 + b.cols)) + 0.3;
+  const R0 = Math.min(...all.map((b) => b.r0)) - 1.3, R1 = Math.max(...all.map((b) => b.r0 + b.rows)) + 0.3;
+  const GT = 16;   // the ground's thickness
+  {
+    const [ax, ay] = pt(C0, R0), [bx, by] = pt(C1, R0), [cx, cy] = pt(C1, R1), [dx, dy] = pt(C0, R1);
+    [[ax, ay], [bx, by], [cx, cy + GT + 16], [dx, dy]].forEach(([x, y]) => grow(x, y));
+    const edge = night ? "#e879f9" : "#8b5cf6";
+    ground += `<g class="ground">
+      <ellipse cx="${(dx + bx) / 2}" cy="${cy + GT + 6}" rx="${(bx - dx) / 2.1}" ry="14" fill="#000" opacity="${night ? .45 : .18}" filter="url(#soft)"/>
+      <polygon points="${dx},${dy} ${cx},${cy} ${cx},${cy + GT} ${dx},${dy + GT}" fill="${night ? "#070a16" : "#9aa5b8"}"/>
+      <polygon points="${cx},${cy} ${bx},${by} ${bx},${by + GT} ${cx},${cy + GT}" fill="${night ? "#0c1124" : "#b4bdcc"}"/>
+      <polygon points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="${night ? "#0b1022" : "#d9dee8"}"/>`;
+    // a faint tech grid over the ground
+    for (let c = Math.ceil(C0); c <= C1; c++) { const [p, q] = [pt(c, R0), pt(c, R1)];
+      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${night ? "#3b4a8a" : "#fff"}" stroke-width=".6" opacity="${night ? .35 : .5}"/>`; }
+    for (let r = Math.ceil(R0); r <= R1; r++) { const [p, q] = [pt(C0, r), pt(C1, r)];
+      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${night ? "#3b4a8a" : "#fff"}" stroke-width=".6" opacity="${night ? .35 : .5}"/>`; }
+    // roads: the ring around the city and the avenues between districts, with traffic
+    const road = (horizontalC, v) => {   // horizontalC: a road along r at fixed c (true) or along c at fixed r
+      const P = (a, s) => horizontalC ? pt(v + s, a) : pt(a, v + s);
+      const [A0, A1] = horizontalC ? [R0 + .05, R1 - .05] : [C0 + .05, C1 - .05];
+      const q = [P(A0, -.33), P(A0, .33), P(A1, .33), P(A1, -.33)];
+      let s = `<polygon points="${q.map((p) => p.join(",")).join(" ")}" fill="${night ? "#05070f" : "#5b6578"}"/>`;
+      const [m0, m1] = [P(A0, 0), P(A1, 0)];
+      s += `<line x1="${m0[0]}" y1="${m0[1]}" x2="${m1[0]}" y2="${m1[1]}" stroke="${night ? "#22d3ee" : "#f8fafc"}" stroke-width="1" stroke-dasharray="5 6" opacity="${night ? .75 : .8}"/>`;
+      for (const [lane, col, dur] of [[-.16, night ? "#f0abfc" : "#fde047", 9], [.16, night ? "#67e8f9" : "#f8fafc", 12]]) {
+        const [s0, s1] = [P(A0, lane), P(A1, lane)], path = lane < 0 ? `M${s0} L${s1}` : `M${s1} L${s0}`;
+        for (let k = 0; k < 2; k++)
+          s += `<circle r="1.7" fill="${col}" ${night ? 'filter="url(#glow)"' : ""}><animateMotion dur="${dur + k * 3}s" begin="-${(k * 5 + v * 3) % dur}s" repeatCount="indefinite" path="${path}"/></circle>`;
+      }
+      return s;
+    };
+    for (const c of [C0 + .45, ...roads.c, C1 - .45]) ground += road(true, c);
+    for (const r of [R0 + .45, ...roads.r, R1 - .45]) ground += road(false, r);
+    ground += `<polyline points="${dx},${dy} ${cx},${cy} ${bx},${by}" fill="none" stroke="${edge}" stroke-width="1.6" opacity=".9" ${night ? 'filter="url(#glow)"' : ""}/>
+      <polyline points="${dx},${dy + GT} ${cx},${cy + GT} ${bx},${by + GT}" fill="none" stroke="${night ? "#22d3ee" : "#a5b4fc"}" stroke-width="1" opacity=".6"/></g>`;
+  }
   for (const [k, bl] of Object.entries(blocks)) {
-    const { c0, r0, cols, rows } = bl, tint = TINT[k] || "#94a3b8";
+    const { c0, r0, cols, rows } = bl, tint = TINT[k] || "#94a3b8", P = 3;
     const [ax, ay] = pt(c0 - 0.4, r0 - 0.4), [bx, by] = pt(c0 + cols - 0.6, r0 - 0.4),
       [cx, cy] = pt(c0 + cols - 0.6, r0 + rows - 0.6), [dx, dy] = pt(c0 - 0.4, r0 + rows - 0.6);
-    [[ax, ay], [bx, by], [cx, cy + T + 30], [dx, dy]].forEach(([x, y]) => grow(x, y));
-    const top = night ? mix("#1e293b", tint, .28) : mix("#f1f5f9", tint, .22);
+    const top = night ? mix("#0f1630", tint, .16) : mix("#eef1f6", tint, .16);
     ground += `<g class="isl" data-d="${k}">
-      <ellipse cx="${(ax + cx) / 2}" cy="${cy + T + 12}" rx="${(bx - dx) / 2.4}" ry="10" fill="#000" opacity=".2" filter="url(#soft)"/>
-      <polygon points="${dx},${dy} ${cx},${cy} ${cx},${cy + T} ${dx},${dy + T}" fill="${night ? mix("#0f172a", tint, .2) : mix("#94a3b8", tint, .25)}"/>
-      <polygon points="${cx},${cy} ${bx},${by} ${bx},${by + T} ${cx},${cy + T}" fill="${night ? mix("#1e293b", tint, .25) : mix("#a8b5c7", tint, .3)}"/>
-      <polygon class="isl-top" points="${ax},${ay} ${bx},${by} ${cx},${cy} ${dx},${dy}" fill="${top}"/>`;
+      <polygon points="${dx},${dy} ${cx},${cy} ${cx},${cy + P} ${dx},${dy + P}" fill="${night ? mix("#05070f", tint, .3) : mix("#94a3b8", tint, .3)}"/>
+      <polygon points="${cx},${cy} ${bx},${by} ${bx},${by + P} ${cx},${cy + P}" fill="${night ? mix("#0b1022", tint, .35) : mix("#a8b5c7", tint, .35)}"/>
+      <polygon class="isl-top" points="${ax},${ay - P} ${bx},${by - P} ${cx},${cy - P} ${dx},${dy - P}" transform="translate(0 ${P})" fill="${top}"
+        stroke="${tint}" stroke-width="1.2" stroke-opacity="${night ? .9 : .6}" ${night ? 'filter="url(#glow)"' : ""}/>`;
     for (let r = 1; r < rows; r++) { const [p, q] = [pt(c0 - 0.4, r0 + r - 0.5), pt(c0 + cols - 0.6, r0 + r - 0.5)];
-      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${night ? "#475569" : "#fff"}" stroke-width="1" stroke-dasharray="4 5" opacity=".7"/>`; }
+      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${tint}" stroke-width=".8" stroke-dasharray="3 5" opacity="${night ? .45 : .4}"/>`; }
     for (let c = 1; c < cols; c++) { const [p, q] = [pt(c0 + c - 0.5, r0 - 0.4), pt(c0 + c - 0.5, r0 + rows - 0.6)];
-      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${night ? "#475569" : "#fff"}" stroke-width="1" stroke-dasharray="4 5" opacity=".7"/>`; }
+      ground += `<line x1="${p[0]}" y1="${p[1]}" x2="${q[0]}" y2="${q[1]}" stroke="${tint}" stroke-width=".8" stroke-dasharray="3 5" opacity="${night ? .45 : .4}"/>`; }
     ground += `</g>`;
     bl.box = { x: dx - 20, y: ay - 150, w: bx - dx + 40, h: cy - ay + 190 };
     for (let i = 0; i < cols * rows; i++)
       tiles.push({ b: bl.members[i] || null, d: k, c: c0 + (i % cols), r: r0 + Math.floor(i / cols) });
-    // the district's sign at the front tip of its island
+    // the district's sign at the front tip of its plaza, on the road
     const nm = `${bl.d.emoji} ${bl.d.name}`, sw = 18 + nm.length * 6.4;
-    signs += `<g class="sign" data-d="${k}" transform="translate(${cx},${cy + T + 16})">
-      <rect x="${-sw / 2}" y="-12" width="${sw}" height="22" rx="11" fill="${night ? "rgba(15,23,42,.75)" : "rgba(255,255,255,.88)"}" stroke="${tint}" stroke-width="1.5"/>
+    signs += `<g class="sign" data-d="${k}" transform="translate(${cx},${cy + 15})">
+      <rect x="${-sw / 2}" y="-12" width="${sw}" height="22" rx="11" fill="${night ? "rgba(8,10,25,.82)" : "rgba(255,255,255,.9)"}" stroke="${tint}" stroke-width="1.5" ${night ? 'filter="url(#glow)"' : ""}/>
       <text y="3.5" font-size="11" font-weight="800" fill="${night ? "#fff" : "#0f172a"}" text-anchor="middle" font-family="Vazirmatn, Tahoma">${esc(nm)}</text></g>`;
-    grow(cx - sw / 2, cy + T + 30); grow(cx + sw / 2, cy + T + 30);
+  }
+
+  for (const f of cityLayout.fill) for (let a = 0; a < f.cols * 2; a++) for (let q = 0; q < f.rows * 2; q++) {
+    const sd = f.seed * 31 + a * 7 + q * 3;
+    if (rnd(sd) < .35) continue;
+    tiles.push({ filler: true, c: f.c0 - .25 + a * .5, r: f.r0 - .25 + q * .5, h: 14 + Math.floor(rnd(sd + 1) * 5) ** 2 * 3.2, sd });
   }
 
   // 2. lots and buildings, back to front
   tiles.sort((p, q) => (p.c + p.r) - (q.c + q.r) || p.c - q.c);
   tiles.forEach((t, idx) => {
     const [x, y] = pt(t.c, t.r), b = t.b, tw = w * FP, th = h * FP;
+    if (t.filler) {   // a background tower: no task lives here, it only fills the skyline
+      const fw = tw * .42, fth = th * .42, H = t.h, ac = NEONS[t.sd % NEONS.length];
+      const L = night ? "#080c1a" : "#8692a8", R = night ? "#0e1428" : "#a3adc0", Tp = night ? "#1a2238" : "#c3cad7";
+      let f = `<polygon points="${x - fw},${y} ${x},${y + fth} ${x},${y + fth - H} ${x - fw},${y - H}" fill="${L}"/>
+        <polygon points="${x},${y + fth} ${x + fw},${y} ${x + fw},${y - H} ${x},${y + fth - H}" fill="${R}"/>
+        <polygon points="${x},${y - fth - H} ${x + fw},${y - H} ${x},${y + fth - H} ${x - fw},${y - H}" fill="${Tp}"/>`;
+      if (night) for (let z = 6; z < H - 3; z += 5) for (const u of [.3, .7]) {
+        if (rnd(t.sd + z * 3 + u * 10) > .45) continue;
+        f += `<rect x="${x - fw + fw * u - .8}" y="${y + fth * u - z - 1.6}" width="1.6" height="1.6" fill="${ac}" opacity=".8"/>`;
+      }
+      f += `<polyline points="${x - fw},${y - H} ${x},${y + fth - H} ${x + fw},${y - H}" fill="none" stroke="${ac}" stroke-width=".8" opacity="${night ? .8 : .5}"/>`;
+      city += `<g class="filler" opacity="${night ? .9 : .75}">${f}</g>`;
+      return;
+    }
     const lot = (k) => `${x},${y - h * k} ${x + w * k},${y} ${x},${y + h * k} ${x - w * k},${y}`;
     if (!b) {
       if (t.d === "future") {   // a lot waiting for an idea
@@ -450,7 +516,7 @@ function drawCity() {
     defs += `<linearGradient id="L${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, .92)}"/><stop offset="1" stop-color="${shade(c, .62)}"/></linearGradient>
       <linearGradient id="R${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, 1.12)}"/><stop offset="1" stop-color="${shade(c, .82)}"/></linearGradient>
       <linearGradient id="T${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${shade(c, 1.35)}"/><stop offset="1" stop-color="${shade(c, 1.08)}"/></linearGradient>`;
-    let g = `<polygon points="${lot(.78)}" fill="${night ? "#273449" : "#f8fafc"}" opacity=".95"/>`;
+    let g = `<polygon points="${lot(.78)}" fill="${night ? "#0a0f1f" : "#e2e6ee"}" stroke="${c}" stroke-opacity="${night ? .5 : .35}" stroke-width=".8"/>`;
     let labelY, H;
     if (b.floors === 0) {
       H = 30;
@@ -473,63 +539,91 @@ function drawCity() {
           <polygon points="${X},${y + bh - z0} ${X + bw},${y - z0} ${X + bw},${y - z1} ${X},${y + bh - z1}" fill="${R}"/>
           <polygon points="${X},${y - bh - z1} ${X + bw},${y - z1} ${X},${y + bh - z1} ${X - bw},${y - z1}" fill="${T}"/>`;
       };
-      const winOn = (i, j) => night ? (lit ? rnd(idx * 97 + i * 7 + j) > .25 : rnd(idx * 31 + i * 5 + j) > .9) : true;
+      const winOn = (i, j) => night ? (lit ? rnd(idx * 97 + i * 7 + j) > .3 : rnd(idx * 31 + i * 5 + j) > .88) : true;
+      const NEON = ["#67e8f9", "#f0abfc", "#fde68a", "#a5b4fc"];
+      const winCol = (i, j) => night ? NEON[Math.floor(rnd(idx * 13 + i * 3 + j) * 4)] : "#dbeafe";
+      const neon = lit ? c : mix("#475569", c, .35), glowIf = night && lit ? 'filter="url(#glow)"' : "";
+      // a point on the left (u: 0 back .. 1 front) or right face (u: 0 front .. 1 back) of a box of half-width k, at height z
+      const onL = (u, z, k = 1) => [x - tw * k + tw * k * u, y + th * k * u - z];
+      const onR = (u, z, k = 1) => [x + tw * k * u, y + th * k - th * k * u - z];
+      const panel = (on, u0, u1, z0, z1, k = 1) => [on(u0, z0, k), on(u1, z0, k), on(u1, z1, k), on(u0, z1, k)].map((p) => p.join(",")).join(" ");
+      const ring = (z, k, col, wdt = 1) => `<polyline points="${x - tw * k},${y - z} ${x},${y + th * k - z} ${x + tw * k},${y - z}" fill="none" stroke="${col}" stroke-width="${wdt}" ${glowIf}/>`;
       if (style === "terrace") {
-        // a twisting tower of white balcony slabs around a glass core
-        const core = mix("#0f172a", c, .25), coreR = mix("#1e293b", c, .3);
+        // the flagship: a twisting stack of dark slabs around a glass core, each slab edged in neon
+        const core = mix("#060914", c, .22), coreR = mix("#101833", c, .3);
         for (let i = 0; i < n; i++) {
           const z0 = 8 + i * fh, z1 = z0 + fh, wob = Math.sin(i * .55) * 3.2, wide = 1 + .1 * Math.sin(i * .8 + 1);
-          g += box(tw * .74, th * .74, z0, z1, core, coreR, core, wob * .4);
-          if (night && fh >= 4) {
+          g += box(tw * .72, th * .72, z0, z1, core, coreR, core, wob * .4);
+          if (fh >= 4) {
             const on = winOn(i, 0), on2 = winOn(i, 1);
-            g += `<polygon points="${x - tw * .7 + wob * .4},${y - z0 - 1.5} ${x + wob * .4},${y + th * .7 - z0 - 1.5} ${x + wob * .4},${y + th * .7 - z1 + 1.5} ${x - tw * .7 + wob * .4},${y - z1 + 1.5}" fill="${on ? "#fde68a" : "#1e293b"}" opacity="${on ? .8 : .6}"/>
-              <polygon points="${x + wob * .4},${y + th * .7 - z0 - 1.5} ${x + tw * .7 + wob * .4},${y - z0 - 1.5} ${x + tw * .7 + wob * .4},${y - z1 + 1.5} ${x + wob * .4},${y + th * .7 - z1 + 1.5}" fill="${on2 ? "#fcd34d" : "#1e293b"}" opacity="${on2 ? .7 : .6}"/>`;
+            g += `<polygon points="${x - tw * .68 + wob * .4},${y - z0 - 1.5} ${x + wob * .4},${y + th * .68 - z0 - 1.5} ${x + wob * .4},${y + th * .68 - z1 + 1.5} ${x - tw * .68 + wob * .4},${y - z1 + 1.5}" fill="${on ? winCol(i, 0) : "#0b1022"}" opacity="${night ? (on ? .75 : .7) : .35}"/>
+              <polygon points="${x + wob * .4},${y + th * .68 - z0 - 1.5} ${x + tw * .68 + wob * .4},${y - z0 - 1.5} ${x + tw * .68 + wob * .4},${y - z1 + 1.5} ${x + wob * .4},${y + th * .68 - z1 + 1.5}" fill="${on2 ? winCol(i, 1) : "#0b1022"}" opacity="${night ? (on2 ? .65 : .7) : .3}"/>`;
           }
-          g += box(tw * wide, th * wide, z1 - 1.6, z1, night ? "#94a3b8" : "#e2e8f0", night ? "#cbd5e1" : "#f8fafc", night ? "#e2e8f0" : "#ffffff", wob);
-          if (i % 3 === 1) g += `<circle cx="${x - tw * .55 + wob}" cy="${y - z1 + 1}" r="1.6" fill="#22c55e"/><circle cx="${x + tw * .5 + wob}" cy="${y - z1 + 1.5}" r="1.4" fill="#16a34a"/>`;
+          g += box(tw * wide, th * wide, z1 - 1.6, z1, night ? "#1a2238" : "#475569", night ? "#232d48" : "#64748b", night ? "#2a3552" : "#94a3b8", wob);
+          g += `<polyline points="${x - tw * wide + wob},${y - z1 + .8} ${x + wob},${y + th * wide - z1 + .8} ${x + tw * wide + wob},${y - z1 + .8}" fill="none" stroke="${neon}" stroke-width="${i % 4 === 3 ? 1.4 : .8}" opacity="${i % 4 === 3 ? 1 : .7}" ${glowIf}/>`;
         }
-        g += box(tw * .5, th * .5, H, H + 5, mix("#e2e8f0", c, .2), "#f8fafc", "#ffffff");
+        g += box(tw * .5, th * .5, H, H + 5, mix("#0b1022", c, .3), mix("#1e293b", c, .4), neon);
       } else if (style === "glass") {
-        // a glass curtain-wall tower; the bigger ones step back near the top and wear an LED edge
-        const L = mix("#0b1220", c, night ? .22 : .32), R = mix("#1e293b", c, night ? .32 : .45), T = mix("#334155", c, .5);
-        const step = n >= 9 ? 8 + Math.round(n * .72) * fh : H;
-        g += box(tw, th, 0, step, L, R, T);
-        if (step < H) g += box(tw * .74, th * .74, step, H, L, R, T);
-        // reflections and mullions
-        g += `<polygon points="${x + tw * .15},${y + th * .85} ${x + tw * .45},${y + th * .55} ${x + tw * .45},${y + th * .55 - step} ${x + tw * .15},${y + th * .85 - step}" fill="#fff" opacity="${night ? .04 : .12}"/>`;
-        for (let k = 1; k < 4; k++) {
-          const lx = x - tw + tw * k / 4, ly = y + th * k / 4, rx = x + tw * k / 4, ry = y + th - th * k / 4;
-          g += `<line x1="${lx}" y1="${ly}" x2="${lx}" y2="${ly - step}" stroke="#fff" stroke-opacity=".12" stroke-width=".7"/>
-            <line x1="${rx}" y1="${ry}" x2="${rx}" y2="${ry - step}" stroke="#fff" stroke-opacity=".16" stroke-width=".7"/>`;
-        }
+        // a neon spire: a dark tower that steps back twice, ringed with light bands, a holo sign and a billboard
+        const L = night ? mix("#070b18", c, .14) : mix("#2b3446", c, .22), R = night ? mix("#0e1530", c, .22) : mix("#3c4760", c, .3);
+        const Tp = mix("#1e293b", c, .45);
+        const s1 = n >= 9 ? 8 + Math.round(n * .62) * fh : H, s2 = n >= 15 ? 8 + Math.round(n * .86) * fh : H;
+        const kAt = (z) => z < s1 ? 1 : z < s2 ? .78 : .58;
+        g += box(tw, th, 0, s1, L, R, Tp);
+        if (s1 < H) g += box(tw * .78, th * .78, s1, s2, L, R, Tp);
+        if (s2 < H) g += box(tw * .58, th * .58, s2, H, L, R, Tp);
+        // a sheen down the right face
+        g += `<polygon points="${panel(onR, .12, .38, 0, s1)}" fill="#fff" opacity="${night ? .03 : .1}"/>`;
+        // windows: little lit cells, a different color per office
         if (fh >= 4) for (let i = 0; i < n; i++) {
-          const z = 8 + i * fh + fh * .5, w2 = (8 + i * fh) < step ? 1 : .74;
-          for (let j = 0; j < 4; j++) {
+          const z = 8 + i * fh + fh * .3, k = kAt(z);
+          for (let j = 0; j < 6; j++) {
             if (!winOn(i, j)) continue;
-            const k = (j + .5) / 4;
-            const wx = j < 2 ? x - tw * w2 + tw * w2 * (k * 2) : x + tw * w2 * ((k - .5) * 2);
-            const wy = j < 2 ? y + th * w2 * (k * 2) - z : y + th * w2 - th * w2 * ((k - .5) * 2) - z;
-            g += `<rect x="${wx - 1.6}" y="${wy - 1}" width="3.2" height="${Math.max(1.4, fh * .35)}" fill="${night ? "#fde68a" : "#e0f2fe"}" opacity="${night ? .85 : .35}"/>`;
+            const u = ((j % 3) + .5) / 3, [wx, wy] = (j < 3 ? onL : onR)(u, z, k);
+            g += `<rect x="${wx - 1.5}" y="${wy - Math.max(1.4, fh * .32)}" width="3" height="${Math.max(1.4, fh * .32)}" fill="${winCol(i, j)}" opacity="${night ? .9 : .4}"/>`;
           }
         }
-        const led = lit ? c : mix("#64748b", c, .3);
-        g += `<line x1="${x}" y1="${y + th}" x2="${x}" y2="${y + th - step}" stroke="${led}" stroke-width="${night ? 1.6 : 1.1}" ${night && lit ? 'filter="url(#glow)"' : ""}/>
-          <polyline points="${x - tw * (step < H ? .74 : 1)},${y - H} ${x},${y - th * (step < H ? .74 : 1) - H} ${x + tw * (step < H ? .74 : 1)},${y - H}" fill="none" stroke="${led}" stroke-width="1.2" ${night && lit ? 'filter="url(#glow)"' : ""}/>`;
-        if (night && lit) for (const k of [.33, .66])
-          g += `<line x1="${x + tw * k}" y1="${y + th - th * k}" x2="${x + tw * k}" y2="${y + th - th * k - step}" stroke="${c}" stroke-width="1" opacity=".7" filter="url(#glow)"/>`;
+        // light bands every few floors and on each setback, the front edge in neon
+        for (let i = 3; i < n; i += 4) { const z = 8 + i * fh; g += ring(z, kAt(z), neon, .8); }
+        for (const [z0, z1, k] of [[0, s1, 1], [s1, s2, .78], [s2, H, .58]]) if (z1 > z0) {
+          g += `<line x1="${x}" y1="${y + th * k - z0}" x2="${x}" y2="${y + th * k - z1}" stroke="${neon}" stroke-width="${night ? 1.6 : 1.2}" ${glowIf}/>`;
+          g += ring(z1, k, neon, 1.3);
+        }
+        // a vertical holo sign on the left face
+        if (n >= 6) {
+          const za = s1 * .3, zb = s1 * .82;
+          g += `<polygon points="${panel(onL, .12, .3, za, zb)}" fill="${c}" opacity="${night ? (lit ? .9 : .45) : .75}" ${glowIf}/>`;
+          for (let q = 0; q < 5; q++) { const z = za + (zb - za) * (q + .5) / 5, [p0, p1] = [onL(.16, z), onL(.26, z)];
+            g += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="#fff" stroke-width="1.2" opacity=".75"/>`; }
+        }
+        // a big tower carries a billboard on its right face
+        if (n >= 12) {
+          const zb = s1 * .55, za = zb - Math.min(26, s1 * .22);
+          defs += `<linearGradient id="B${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c}"/><stop offset=".55" stop-color="#ec4899"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>`;
+          g += `<polygon points="${panel(onR, .18, .86, za, zb)}" fill="url(#B${id})" opacity="${night ? .92 : .85}" ${night ? 'filter="url(#glow)"' : ""}>
+            <animate attributeName="opacity" values="${night ? ".92;.6;.92;.92" : ".85;.7;.85;.85"}" dur="4s" repeatCount="indefinite"/></polygon>`;
+          for (let q = 1; q < 4; q++) { const z = za + (zb - za) * q / 4, [p0, p1] = [onR(.24, z), onR(.8, z)];
+            g += `<line x1="${p0[0]}" y1="${p0[1]}" x2="${p1[0]}" y2="${p1[1]}" stroke="#fff" stroke-width=".5" opacity=".35"/>`; }
+        }
       } else {
-        // a low modern block: concrete with ribbon windows and roof units
-        const L = night ? mix("#1e293b", c, .35) : mix("#cbd5e1", c, .35), R = night ? mix("#334155", c, .4) : mix("#e2e8f0", c, .3);
-        const T = night ? mix("#475569", c, .3) : mix("#f8fafc", c, .2);
-        g += box(tw, th, 0, H, L, R, T);
+        // a low block: dark with a neon roofline and a lit shopfront
+        const L = night ? mix("#0b1022", c, .25) : mix("#475569", c, .25), R = night ? mix("#141c36", c, .3) : mix("#5b6b84", c, .28);
+        const Tp = night ? mix("#1e293b", c, .3) : mix("#94a3b8", c, .25);
+        g += box(tw, th, 0, H, L, R, Tp);
         for (let i = 0; i < n; i++) {
           const z0 = 8 + i * fh + fh * .25, z1 = z0 + fh * .45, on = winOn(i, 0), on2 = winOn(i, 1);
-          const wc = night ? (on ? "#fde68a" : "#0f172a") : mix("#bae6fd", c, .15);
-          g += `<polygon points="${x - tw + 2},${y - z0 + 1} ${x - 1},${y + th - z0 - .5} ${x - 1},${y + th - z1 - .5} ${x - tw + 2},${y - z1 + 1}" fill="${wc}" opacity="${night ? .85 : .9}"/>
-            <polygon points="${x + 1},${y + th - z0 - .5} ${x + tw - 2},${y - z0 + 1} ${x + tw - 2},${y - z1 + 1} ${x + 1},${y + th - z1 - .5}" fill="${night ? (on2 ? "#fcd34d" : "#0f172a") : mix("#e0f2fe", c, .1)}" opacity=".85"/>`;
+          g += `<polygon points="${panel(onL, .08, .92, z0, z1)}" fill="${on ? winCol(i, 0) : "#0b1022"}" opacity="${night ? .85 : .35}"/>
+            <polygon points="${panel(onR, .08, .92, z0, z1)}" fill="${on2 ? winCol(i, 1) : "#0b1022"}" opacity="${night ? .8 : .3}"/>`;
         }
-        g += box(tw * .28, th * .28, H, H + 4, night ? "#334155" : "#94a3b8", night ? "#475569" : "#cbd5e1", night ? "#64748b" : "#e2e8f0", -tw * .3)
-          + box(tw * .2, th * .2, H, H + 3, night ? "#334155" : "#94a3b8", night ? "#475569" : "#cbd5e1", night ? "#64748b" : "#e2e8f0", tw * .35);
+        g += `<polygon points="${panel(onR, .12, .88, 1, 6)}" fill="${neon}" opacity="${night ? .85 : .7}" ${glowIf}/>`;
+        g += ring(H, 1, neon, 1.3);
+        g += box(tw * .28, th * .28, H, H + 4, night ? "#1e293b" : "#64748b", night ? "#334155" : "#94a3b8", night ? "#475569" : "#cbd5e1", -tw * .3)
+          + box(tw * .2, th * .2, H, H + 3, night ? "#1e293b" : "#64748b", night ? "#334155" : "#94a3b8", night ? "#475569" : "#cbd5e1", tw * .35);
+      }
+      // a beam of light from the roof of every building that got work done today
+      if (lit && n >= 4) {
+        defs += `<linearGradient id="beam${id}" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${c}" stop-opacity=".7"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
+        g += `<polygon points="${x - 3},${y - H} ${x + 3},${y - H} ${x + 9},${y - H - 70} ${x - 9},${y - H - 70}" fill="url(#beam${id})" opacity="${night ? .55 : .3}"/>`;
       }
       if (b.overdue)
         g += `<polygon points="${x - tw - 3},${y + 2} ${x},${y + th + 3} ${x},${y + th - H + 6} ${x - tw - 3},${y - H + 6}" fill="url(#sc)" opacity=".85"/>`;
