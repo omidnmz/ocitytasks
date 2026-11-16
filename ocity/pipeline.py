@@ -30,6 +30,7 @@ BRANDS: dict[str, tuple[str, ...]] = {
     "retailos": ("retail os", "ریتیل"),
 }
 MARKETING_BRANDS = ("retail", "smarto", "fitness")  # the pages that get a weekly plan
+REEL_QUOTA = {"retail": "۳ تا ۵", "smarto": "۲", "fitness": "۲"}  # reels a week per page
 
 FIELDS = {"هدف": "goal", "مخاطب": "audience", "پیام اصلی": "message", "پیام": "message",
           "معیار نتیجه": "metric", "معیار": "metric", "نتیجه هفته قبل": "last_result"}
@@ -130,7 +131,7 @@ def parse(text: str) -> list[Plan]:
     return plans
 
 
-def prompt(brand: str, start: date, end: date, last_metric: str = "") -> str:
+def prompt(brand: str, start: date, end: date, last_metric: str = "", reels: str = "۲ تا ۵") -> str:
     """The text the Mayor pastes into a brand's marketing chat."""
     ask_result = (f"\nنتیجه هفته قبل ({last_metric}) این بود: ...  (قبل از فرستادن، عددش رو بنویس)\n"
                   if last_metric else "")
@@ -139,7 +140,8 @@ def prompt(brand: str, start: date, end: date, last_metric: str = "") -> str:
         "فقط با همین قالب جواب بده، بدون هیچ توضیح اضافه. تاریخ‌ها میلادی و به شکل YYYY-MM-DD باشن.\n\n"
         f"#برند: {brand}\n#هدف: (یه جمله)\n#مخاطب: (یه جمله)\n#پیام اصلی: (یه جمله)\n\n"
         "[استوری]\n(۷ خط، یکی برای هر روز)\nتاریخ | موضوع استوری | توضیح کوتاه یا ایده\n\n"
-        "[ریلز]\n(۲ تا ۵ خط)\nتاریخ انتشار | عنوان | فرمت (ریل/پست/کاروسل) | سناریو کوتاه و شات‌لیست | آماده‌سازی لازم\n\n"
+        f"[ریلز]\n({reels} خط)\n"
+        "تاریخ انتشار | عنوان | فرمت (ریل/پست/کاروسل) | سناریو کوتاه و شات‌لیست | آماده‌سازی لازم\n\n"
         "[کارها]\n(کارهای غیرمحتوایی، اگه هست)\nعنوان کار | کدوم بخش (محصول/سایت/پرسنل)\n\n"
         "#معیار نتیجه: (عددی که آخر هفته باید چک کنم)"
     )
