@@ -335,6 +335,14 @@ class Bot:
             return
         await update.message.reply_text(self.city.script_text(task), reply_markup=task_keyboard(task.id))
 
+    async def logout(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Sign every browser out of the city website (the Telegram Mini App is not affected)."""
+        if not self.is_owner(update):
+            return
+        import secrets
+        self.db.set_state("web_session_gen", secrets.token_hex(8))
+        await update.message.reply_text("🔐 همه مرورگرها از سایت شهر خارج شدن.")
+
     async def delete(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not self.is_owner(update):
             return
@@ -635,10 +643,16 @@ def main() -> None:
     async def post_init(app: Application) -> None:
         nonlocal runner
         await app.bot.set_my_commands(COMMANDS)
-        if cfg.webapp_url:
-            from . import web  # aiohttp is only needed when the Mini App is on
+        if cfg.webapp_url or cfg.site_url:
+            from . import web  # aiohttp is only needed when the Mini App or the website is on
 
-            runner = await web.start(bot.city, cfg.telegram_token, bot.owner_id, cfg.web_host, cfg.web_port)
+            async def send_login(text: str, url: str) -> None:
+                button = InlineKeyboardMarkup([[InlineKeyboardButton("🔐 ورود به شهر", url=url)]])
+                await app.bot.send_message(bot.owner_id(), text, reply_markup=button)
+
+            runner = await web.start(bot.city, cfg.telegram_token, bot.owner_id, cfg.web_host, cfg.web_port,
+                                     send_login, cfg.site_url)
+        if cfg.webapp_url:
             await app.bot.set_chat_menu_button(
                 menu_button=MenuButtonWebApp(text="🏙 شهر", web_app=WebAppInfo(url=cfg.webapp_url))
             )
@@ -670,6 +684,7 @@ def main() -> None:
     app.add_handler(CommandHandler("sprint", bot.sprint))
     app.add_handler(CommandHandler("script", bot.script))
     app.add_handler(CommandHandler("del", bot.delete))
+    app.add_handler(CommandHandler("logout", bot.logout))
     app.add_handler(CallbackQueryHandler(bot.button))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, bot.voice))
     app.add_handler(MessageHandler(filters.Document.ALL, bot.document))

@@ -3,6 +3,10 @@
 Telegram opens `WEBAPP_URL` inside the chat. Every API call carries the
 Mini App's signed `initData`; it is checked against the bot token and the
 owner's id, so only the Mayor can read or change the city.
+
+The same page also works as a plain website (SITE_URL, e.g. https://city.modiret.ir). There is no
+Telegram signature there, so the Mayor logs in with a one-time link the bot sends him in Telegram;
+the browser then keeps a signed session cookie.
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ import hmac
 import json
 import logging
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +34,28 @@ STATIC = Path(__file__).parent / "static"
 MAX_AGE = 24 * 3600  # seconds a Mini App session stays valid
 SNOOZE_OPTIONS = {"30", "60", "tonight", "tomorrow"}
 REMIND_OPTIONS = {"1h", "evening", "tonight", "tomorrow", "week", "none"}
+COOKIE = "ocity_session"
+SESSION_DAYS = 30
+LINK_MINUTES = 10
+LINK_EVERY = 60  # seconds between login links, so the button can't spam the Mayor
+
+
+def _session_key(token: str, generation: str) -> bytes:
+    return hmac.new(b"ocity-web-session", f"{token}:{generation}".encode(), hashlib.sha256).digest()
+
+
+def make_session(token: str, generation: str, now: float | None = None) -> str:
+    exp = str(int((now or time.time()) + SESSION_DAYS * 86400))
+    sig = hmac.new(_session_key(token, generation), exp.encode(), hashlib.sha256).hexdigest()
+    return f"{exp}.{sig}"
+
+
+def check_session(value: str, token: str, generation: str, now: float | None = None) -> bool:
+    exp, _, sig = (value or "").partition(".")
+    if not exp.isdigit() or not sig or not token:
+        return False
+    expected = hmac.new(_session_key(token, generation), exp.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, sig) and int(exp) > (now or time.time())
 
 
 def verify_init_data(init_data: str, token: str, now: float | None = None) -> dict | None:
@@ -54,18 +81,79 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def make_app(city: CityHall, token: str, owner_id) -> web.Application:
-    """owner_id: a function returning the owner's chat id (it can be claimed after startup)."""
+LOGIN_PAGE = """<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>ورود به شهر</title>
+<style>body{font-family:system-ui,Tahoma,sans-serif;background:#f3f4fa;color:#1e1b4b;display:grid;place-items:center;
+min-height:100vh;margin:0}form{background:#fff;padding:28px;border-radius:20px;text-align:center;max-width:320px;
+box-shadow:0 10px 30px rgba(0,0,0,.08)}button{font:inherit;font-size:17px;border:0;border-radius:14px;padding:12px 28px;
+background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer}</style></head>
+<body><form method="post"><p>🏙 ورود به شهر OCity روی این مرورگر</p><button>ورود</button></form></body></html>"""
+
+
+def make_app(city: CityHall, token: str, owner_id, notify=None, site_url: str = "") -> web.Application:
+    """owner_id: a function returning the owner's chat id (it can be claimed after startup).
+    notify: an async function(text, url) that sends the Mayor a login link in Telegram;
+    site_url: the website's own fixed address, which the link points at (never the request's Host)."""
+    links: dict[str, float] = {}  # one-time login codes -> expiry
+    last_link = [0.0]
+
+    def generation() -> str:
+        return city.db.get_state("web_session_gen") or "0"
+
+    def cookie_ok(request: web.Request) -> bool:
+        return check_session(request.cookies.get(COOKIE, ""), token, generation())
 
     @web.middleware
     async def auth(request: web.Request, handler):
         if not request.path.startswith("/api/"):
             return await handler(request)
         user = verify_init_data(request.headers.get("X-Init-Data", ""), token)
-        if not user or user.get("id") != owner_id():
-            return web.json_response({"error": "forbidden"}, status=403)
+        telegram = bool(user) and user.get("id") == owner_id()
+        # a cookie alone is not enough: the custom header can't be sent by another site's form
+        browser = request.headers.get("X-OCity") == "1" and cookie_ok(request)
+        if not (telegram or browser):
+            return web.json_response({"error": "forbidden", "login": bool(notify and site_url)}, status=403)
         city.seen(now_utc())
         return await handler(request)
+
+    async def login_request(request: web.Request) -> web.Response:
+        if not (notify and site_url and owner_id()):
+            return web.json_response({"error": "off"}, status=404)
+        now = time.time()
+        if now - last_link[0] < LINK_EVERY:
+            return web.json_response({"ok": True, "message": "لینک ورود همین الان فرستاده شد؛ توی تلگرام ببین."})
+        last_link[0] = now
+        for code, exp in list(links.items()):
+            if exp < now:
+                del links[code]
+        code = secrets.token_urlsafe(32)
+        links[code] = now + LINK_MINUTES * 60
+        await notify(f"🔐 کسی (امیدوارم خودت!) خواست از مرورگر وارد شهر بشه.\n"
+                     f"اگه خودت بودی دکمه زیر رو بزن؛ تا {LINK_MINUTES} دقیقه و فقط یه بار کار می‌کنه.\n"
+                     f"اگه خودت نبودی، کاری نکن.", f"{site_url}/auth/{code}")
+        return web.json_response({"ok": True, "message": "📩 لینک ورود رو توی تلگرام برات فرستادم."})
+
+    async def login_page(request: web.Request) -> web.Response:
+        # a page with a button, not an instant login, so link previews can't use up the code
+        if links.get(request.match_info["code"], 0) < time.time():
+            return web.Response(text="این لینک منقضی شده؛ دوباره «ورود» رو بزن.", status=410)
+        return web.Response(text=LOGIN_PAGE, content_type="text/html", headers={"Cache-Control": "no-store"})
+
+    async def login_confirm(request: web.Request) -> web.Response:
+        exp = links.pop(request.match_info["code"], 0)
+        if exp < time.time():
+            return web.Response(text="این لینک منقضی شده؛ دوباره «ورود» رو بزن.", status=410)
+        response = web.Response(status=303, headers={"Location": "/"})
+        response.set_cookie(COOKIE, make_session(token, generation()), max_age=SESSION_DAYS * 86400,
+                            httponly=True, secure=site_url.startswith("https://"), samesite="Lax", path="/")
+        return response
+
+    async def logout(request: web.Request) -> web.Response:
+        # signs out every browser: a new generation makes all old cookies invalid
+        city.db.set_state("web_session_gen", secrets.token_hex(8))
+        response = web.json_response({"ok": True, "message": "از همه مرورگرها خارج شدی."})
+        response.del_cookie(COOKIE, path="/")
+        return response
 
     async def index(request: web.Request) -> web.Response:
         return web.FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
@@ -176,11 +264,16 @@ def make_app(city: CityHall, token: str, owner_id) -> web.Application:
     app.router.add_post("/api/time", set_time)
     app.router.add_get("/api/prompts", prompts)
     app.router.add_post("/api/building/{key}", edit_building)
+    app.router.add_post("/api/logout", logout)
+    app.router.add_post("/auth/request", login_request)
+    app.router.add_get("/auth/{code}", login_page)
+    app.router.add_post("/auth/{code}", login_confirm)
     return app
 
 
-async def start(city: CityHall, token: str, owner_id, host: str, port: int) -> web.AppRunner:
-    runner = web.AppRunner(make_app(city, token, owner_id))
+async def start(city: CityHall, token: str, owner_id, host: str, port: int,
+                notify=None, site_url: str = "") -> web.AppRunner:
+    runner = web.AppRunner(make_app(city, token, owner_id, notify, site_url))
     await runner.setup()
     await web.TCPSite(runner, host, port).start()
     log.info("Mini App server on http://%s:%s", host, port)

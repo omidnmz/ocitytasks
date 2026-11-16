@@ -104,3 +104,60 @@ def test_api_takes_a_marketing_plan_and_its_times():
         assert state["media"]["cards"][0]["stage"] == "filming" and state["media"]["times"]["filming"] == "10:00"
         assert "lights" in state and len((await (await client.get("/api/prompts", headers=h)).json())["prompts"]) == 3
     run(check)
+
+
+def test_browser_login_by_a_one_time_telegram_link():
+    city = CityHall(DB(":memory:"), Config())
+    sent = []
+
+    async def notify(text, url):
+        sent.append(url)
+
+    async def main():
+        app = make_app(city, TOKEN, lambda: OWNER, notify, "https://city.example.ir")
+        client = TestClient(TestServer(app))
+        await client.start_server()
+        try:
+            h = {"X-OCity": "1"}
+            r = await client.get("/api/state", headers=h)
+            assert r.status == 403 and (await r.json())["login"] is True
+            # the link goes to the fixed site address, whatever Host the request claims
+            r = await client.post("/auth/request", headers={"Host": "evil.example"})
+            assert r.status == 200 and sent[0].startswith("https://city.example.ir/auth/")
+            await client.post("/auth/request")
+            assert len(sent) == 1  # one link a minute
+            code = sent[0].rsplit("/", 1)[1]
+            assert (await client.get(f"/auth/{code}")).status == 200  # a preview only shows the button
+            assert (await client.get("/auth/wrong")).status == 410
+            r = await client.post(f"/auth/{code}", allow_redirects=False)
+            assert r.status == 303
+            cookie = r.cookies["ocity_session"].value
+            assert (await client.post(f"/auth/{code}", allow_redirects=False)).status == 410  # used up
+            jar = {"ocity_session": cookie}
+            client.session.cookie_jar.clear()
+            assert (await client.get("/api/state", headers=h, cookies=jar)).status == 200
+            # the cookie alone, without the header another site can't send, is not enough
+            assert (await client.get("/api/state", cookies=jar)).status == 403
+            assert (await client.post("/api/logout", headers=h, cookies=jar)).status == 200
+            client.session.cookie_jar.clear()
+            assert (await client.get("/api/state", headers=h, cookies=jar)).status == 403
+        finally:
+            await client.close()
+
+    asyncio.run(main())
+
+
+def test_no_login_without_a_site_address():
+    city = CityHall(DB(":memory:"), Config())
+
+    async def main():
+        client = TestClient(TestServer(make_app(city, TOKEN, lambda: OWNER)))
+        await client.start_server()
+        try:
+            r = await client.get("/api/state", headers={"X-OCity": "1"})
+            assert r.status == 403 and (await r.json())["login"] is False
+            assert (await client.post("/auth/request")).status == 404
+        finally:
+            await client.close()
+
+    asyncio.run(main())
