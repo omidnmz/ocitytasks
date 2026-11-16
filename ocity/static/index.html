@@ -349,6 +349,9 @@ let VB0 = null, VB = null, focusD = null;
 const NEONS = ["#22d3ee", "#e879f9", "#f472b6", "#a78bfa", "#facc15"];
 // building looks: a twisting terrace tower for the flagship, glass towers for the rest, low blocks while small
 const STYLE = { retail: "terrace", media: "ring" };
+// day art: each tower is a roof piece, one floor piece repeated and a base piece (img/{key}-c|s|b.webp);
+// sizes are in the art's pixels, where the base plinth is 200 wide; px/py is the plinth center in the base piece
+const SPR = {"cityhall":{"w":200,"c":118.1,"s":53.79,"b":106.5,"px":100.0,"py":46.9},"fitness":{"w":201,"c":217.1,"s":35.18,"b":137.7,"px":100.0,"py":77.9},"knowledge":{"w":200,"c":68.6,"s":50.0,"b":128.7,"px":100.0,"py":69.3},"marketing":{"w":200,"c":201.4,"s":19.32,"b":132.9,"px":100.0,"py":74.0},"media":{"w":200,"c":132.6,"s":24.81,"b":74.4,"px":100.0,"py":16.8},"personal":{"w":200,"c":150.5,"s":30.17,"b":115.1,"px":100.0,"py":57.7},"retail":{"w":200,"c":173.8,"s":53.96,"b":96.0,"px":100.0,"py":35.6},"retailos":{"w":200,"c":119.3,"s":30.92,"b":124.5,"px":100.0,"py":65.9},"smarto":{"w":200,"c":234.2,"s":29.42,"b":139.6,"px":100.0,"py":80.9},"technician":{"w":200,"c":232.7,"s":41.71,"b":156.4,"px":100.0,"py":96.0},"techos":{"w":200,"c":112.6,"s":14.87,"b":100.0,"px":100.0,"py":39.8},"tradebot":{"w":200,"c":178.4,"s":26.44,"b":112.5,"px":100.0,"py":53.7},"vault":{"w":200,"c":193.6,"s":32.57,"b":151.8,"px":100.0,"py":92.9}};
 const bstyle = (b) => b.floors < 4 ? "block" : (STYLE[b.key] || (b.floors >= 4 ? "glass" : "block"));
 
 function cityLayout() {
@@ -538,7 +541,7 @@ function drawCity() {
       <linearGradient id="R${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${shade(c, 1.12)}"/><stop offset="1" stop-color="${shade(c, .82)}"/></linearGradient>
       <linearGradient id="T${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${shade(c, 1.35)}"/><stop offset="1" stop-color="${shade(c, 1.08)}"/></linearGradient>`;
     let g = `<polygon points="${lot(.78)}" fill="${night ? "#0a0f1f" : "#e2e6ee"}" stroke="${c}" stroke-opacity="${night ? .5 : .35}" stroke-width=".8"/>`;
-    let labelY, H;
+    let labelY, H, artTop = null;
     const style0 = b.floors ? bstyle(b) : "plot";
     if (b.floors === 0) {
       H = 30;
@@ -570,7 +573,21 @@ function drawCity() {
       const onR = (u, z, k = 1) => [x + tw * k * u, y + th * k - th * k * u - z];
       const panel = (on, u0, u1, z0, z1, k = 1) => [on(u0, z0, k), on(u1, z0, k), on(u1, z1, k), on(u0, z1, k)].map((p) => p.join(",")).join(" ");
       const ring = (z, k, col, wdt = 1) => `<polyline points="${x - tw * k},${y - z} ${x},${y + th * k - z} ${x + tw * k},${y - z}" fill="none" stroke="${col}" stroke-width="${wdt}" ${glowIf}/>`;
-      if (style === "terrace") {
+      const spr = !night && SPR[b.key];
+      if (spr) {
+        // day art: the base, the floor piece once per few floors, then the roof
+        const k = 2 * tw * .84 / 200, X = x - spr.px * k, reps = Math.max(0, Math.round(n * fh * .6 / (spr.s * k)));
+        let top = y - spr.py * k;
+        let art = `<image href="/img/${b.key}-b.webp" x="${X}" y="${top}" width="${spr.w * k}" height="${spr.b * k}" preserveAspectRatio="none"/>`;
+        for (let i = 0; i < reps; i++) {
+          top -= spr.s * k;
+          art += `<image href="/img/${b.key}-s.webp" x="${X}" y="${top}" width="${spr.w * k}" height="${spr.s * k + .6}" preserveAspectRatio="none"/>`;
+        }
+        art = `<image href="/img/${b.key}-c.webp" x="${X}" y="${top - spr.c * k}" width="${spr.w * k}" height="${spr.c * k + .6}" preserveAspectRatio="none"/>` + art;
+        g += art;
+        H = y - top + spr.c * k * .3;
+        artTop = top - spr.c * k;
+      } else if (style === "terrace") {
         // the flagship: a twisting stack of dark slabs around a glass core, each slab edged in neon
         const core = night ? mix("#060914", c, .22) : mix("#3d5a80", c, .25), coreR = night ? mix("#101833", c, .3) : mix("#5b7ba6", c, .25);
         for (let i = 0; i < n; i++) {
@@ -688,11 +705,11 @@ function drawCity() {
       if (b.overdue)
         g += `<polygon points="${x - tw - 3},${y + 2} ${x},${y + th + 3} ${x},${y + th - H + 6} ${x - tw - 3},${y - H + 6}" fill="url(#sc)" opacity=".85"/>`;
       const roof = y - H - (style === "terrace" ? 5 : 0);
-      if (n >= 7) g += `<line x1="${x}" y1="${roof}" x2="${x}" y2="${roof - 18}" stroke="${night ? "#cbd5e1" : "#475569"}" stroke-width="1.2"/>
+      if (n >= 7 && !spr) g += `<line x1="${x}" y1="${roof}" x2="${x}" y2="${roof - 18}" stroke="${night ? "#cbd5e1" : "#475569"}" stroke-width="1.2"/>
         <circle cx="${x}" cy="${roof - 19}" r="2" fill="${lit ? "#22c55e" : "#ef4444"}" filter="url(#glow)"><animate attributeName="opacity" values="1;.15;1" dur="1.4s" repeatCount="indefinite"/></circle>`;
       // today's light: a soft beacon on the roof of every building that got work today
       if (lit) g += `<ellipse cx="${x}" cy="${roof - 2}" rx="${tw * .9}" ry="${th * .9}" fill="${c}" opacity="${night ? .35 : .22}" filter="url(#soft)"/>`;
-      labelY = roof - th - (n >= 7 ? 28 : 13);
+      labelY = artTop !== null ? artTop - 4 : roof - th - (n >= 7 ? 28 : 13);
       if (b.open && !b.overdue) {   // a crane that slowly swings
         const mx = x + tw * 0.5, my = roof + 1;
         g += `<line x1="${mx}" y1="${my}" x2="${mx}" y2="${my - 42}" stroke="url(#crane)" stroke-width="2.6" stroke-linecap="round"/>
@@ -711,7 +728,7 @@ function drawCity() {
     g += `<g transform="translate(${lx},${ly})">
       <circle r="${R + 1.5}" fill="none" stroke="${b.overdue ? "#f59e0b" : c}" stroke-width="1.4" opacity=".9" ${night ? 'filter="url(#glow)"' : ""}/>
       <circle r="${R}" fill="${bg}"/>
-      <text y="${R * .38}" font-size="${R * 1.1}" text-anchor="middle">${b.emoji}</text>
+      ${!night && SPR[b.key] ? `<image href="/img/${b.key}-logo.webp" x="${-R}" y="${-R}" width="${2 * R}" height="${2 * R}"/>` : `<text y="${R * .38}" font-size="${R * 1.1}" text-anchor="middle">${b.emoji}</text>`}
       ${b.floors ? `<g transform="translate(${R + 3},${-R * .2})"><rect x="0" y="-6" width="${8 + String(b.floors).length * 5}" height="11" rx="3" fill="${c}"/>
         <text x="${4 + String(b.floors).length * 2.5}" y="2.5" font-size="8" font-weight="800" fill="#fff" text-anchor="middle" font-family="Vazirmatn, Tahoma">${fa(b.floors)}</text></g>` : ""}
       ${b.priority ? `<circle cx="${-R * .75}" cy="${-R * .75}" r="2.8" fill="#fbbf24" stroke="#fff" stroke-width=".8"/>` : ""}

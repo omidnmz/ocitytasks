@@ -256,6 +256,7 @@ def make_app(city: CityHall, token: str, owner_id, notify=None, site_url: str = 
 
     app = web.Application(middlewares=[auth])
     app.router.add_get("/", index)
+    app.router.add_static("/img", STATIC / "img")
     app.router.add_get("/api/state", state)
     app.router.add_post("/api/task", add_task)
     app.router.add_post("/api/task/{id:\\d+}/{action}", task_action)
