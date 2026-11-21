@@ -200,6 +200,8 @@
     transition: .25s; pointer-events: none; z-index: 7; white-space: pre-line; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
   .toast.on { opacity: .96; transform: none; }
   .err { padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.8; }
+  .bld.spot { animation: spot 1.3s ease-in-out 4; }
+  @keyframes spot { 50% { filter: drop-shadow(0 0 12px #facc15) brightness(1.18); } }
 </style>
 </head>
 <body>
@@ -312,6 +314,15 @@ async function load() {
     return;
   }
   render();
+  // opened from a «see it in the city» button: fly to that building and make its new floor glow
+  const want = new URLSearchParams(location.search).get("b"), b = want && S.buildings.find((x) => x.key === want);
+  if (b) {
+    history.replaceState(null, "", location.pathname);
+    setFocus(b.district);
+    const el = document.querySelector(`#map .bld[data-b="${b.key}"]`);
+    if (el) { el.classList.add("spot"); setTimeout(() => el.classList.remove("spot"), 5200); }
+    celebrate();
+  }
 }
 
 function render() {

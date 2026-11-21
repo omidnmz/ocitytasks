@@ -241,7 +241,7 @@ def test_marketing_day_asks_for_each_brand_plan_until_it_arrives(city):
     assert any("هنوز برنامه مارکتینگ" in m.text for m in city.tick(at(7, 10, 30)))
     for brand in ("کراکس", "SmartO", "Fitness OS"):
         city.import_marketing_plan(f"#برند: {brand}\n[استوری]\n2026-11-08 | سلام | ", at(7, 11))
-    assert not any("مارکتینگ" in m.text for m in city.tick(at(8, 10, 30)))
+    assert not any("مارکتینگ" in m.text for m in city.tick(at(8, 10, 30)) if not m.postcard)
 
 
 def test_production_day_opens_with_the_batch_and_buffer_counts_filmed_pieces(city):
@@ -517,3 +517,30 @@ def test_old_content_plan_tasks_go_once_but_the_new_line_stays():
     again = city.add("انتشار پست: تخفیف", "media", now=at(11, 9), kind="publish")
     CityHall(db, Config())
     assert again.id in {t.id for t in db.open_tasks()}
+
+
+def test_morning_postcard_says_what_grew_and_what_went_dark(city):
+    old = city.add("call the tester", "fitness", now=at(2, 9))
+    city.done(old.id, at(2, 12))
+    for title in ("pay supplier", "post story"):
+        t = city.add(title, "retail", now=at(5, 9))
+        city.done(t.id, at(5, 13))
+    msgs = city.tick(at(6, 10, 30))
+    card = [m for m in msgs if m.postcard]
+    assert len(card) == 1
+    assert "دیروز 2 طبقه به کراکس منیجمنت" in card[0].text
+    assert "Fitness OS 4 روزه خاموشه" in card[0].text
+    assert not [m for m in city.tick(at(6, 10, 31)) if m.postcard]
+
+
+def test_quiet_day_postcard_nudges_to_build(city):
+    msgs = city.tick(at(6, 10, 30))
+    assert "ساکت بود" in [m for m in msgs if m.postcard][0].text
+
+
+def test_postcard_picture_draws_every_tower():
+    from ocity import postcard
+    jpg = postcard.render([{"key": "retail", "floors": 12, "dark": False}, {"key": "fitness", "floors": 3, "dark": True},
+                           {"key": "vault", "floors": 0, "dark": False}, {"key": "custom1", "floors": 4, "dark": False}])
+    assert jpg and jpg[:3] == b"\xff\xd8\xff"
+    assert postcard.render([{"key": "vault", "floors": 0, "dark": False}]) is None
