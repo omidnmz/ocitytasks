@@ -3,3 +3,4 @@ anthropic>=2.3,<3
 pydantic>=2,<3
 tzdata  # time zones on Windows
 aiohttp>=3.9,<4
+Pillow>=10  # the morning picture of the city

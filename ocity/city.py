@@ -77,6 +77,7 @@ class Outgoing:
     stuck: bool = False  # the task keeps getting postponed: offer to shrink, hand off or drop it
     done_buttons: list[Task] = field(default_factory=list)  # one ✅ per task
     start_kind: str | None = None  # a «start filming / editing» button for this station of the content line
+    postcard: bool = False  # the morning picture of the city: sent as a photo with an «open the city» button
 
 
 @dataclass
@@ -713,6 +714,36 @@ class CityHall:
             lit.add("cityhall")
         return lit & set(BUILDINGS)
 
+    def dark_days(self, now: datetime) -> dict[str, int]:
+        """Days since each building last got a floor, for buildings that have ever been worked on."""
+        today = self.local(now).date()
+        last: dict[str, date] = {}
+        for t in self.db.done_tasks():
+            if t.done_at and t.building in BUILDINGS:
+                d = self.local(parse_iso(t.done_at)).date()
+                last[t.building] = max(last.get(t.building, d), d)
+        return {k: (today - d).days for k, d in last.items()}
+
+    def postcard_line(self, now: datetime) -> str:
+        """The morning picture's caption: what grew yesterday and which buildings have gone dark."""
+        today = self.local(now).date()
+        start = self.at_local(today - timedelta(days=1), time(0, 0))
+        grew: dict[str, int] = {}
+        for t in self.db.done_between(start, self.at_local(today, time(0, 0))):
+            if t.building in BUILDINGS:
+                grew[t.building] = grew.get(t.building, 0) + 1
+        parts = []
+        if grew:
+            best = sorted(grew.items(), key=lambda kv: -kv[1])[:3]
+            parts.append("دیروز " + "، ".join(f"{n} طبقه به {BUILDINGS[k].name}" for k, n in best) + " اضافه شد")
+        else:
+            parts.append("دیروز شهر ساکت بود، امروز یه طبقه بساز")
+        dark = sorted(((d, k) for k, d in self.dark_days(now).items() if d >= 3 and k not in ("vault", "cityhall")),
+                      reverse=True)[:2]
+        if dark:
+            parts.append("، ".join(f"{BUILDINGS[k].name} {d} روزه خاموشه" for d, k in dark))
+        return "🏙 صبح بخیر شهردار! " + ". ".join(parts) + "."
+
     def lights_line(self, now: datetime) -> str:
         lit = self.lit_buildings(now)
         total = [k for k in BUILDINGS if k != "vault"]
@@ -811,6 +842,7 @@ class CityHall:
 
         if local.time() >= self.cfg.morning_time and self.db.get_state("last_morning") != today:
             self.db.set_state("last_morning", today)
+            out.append(Outgoing(self.postcard_line(now), postcard=True))
             out.append(Outgoing(self.morning_brief(now)))
             if local.weekday() == self.cfg.review_day:
                 out.append(Outgoing(self.weekly_review(now)))

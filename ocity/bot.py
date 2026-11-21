@@ -32,6 +32,7 @@ from .buildings import BUILDINGS, label
 from .capture import guess_building
 from .city import CityHall, Outgoing
 from .db import DB
+from . import postcard
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ MENU_ALL = "📋 همه کارها"
 MENU_PLAN = "📣 برنامه مارکتینگ"
 MENU_PROFILE = "🧠 روال من"
 MENU_HELP = "❓ راهنما"
-MENU_APP = "🏙 باز کردن شهر"
+MENU_APP = "🏙 شهر من"
 
 
 def make_menu(webapp_url: str = "") -> ReplyKeyboardMarkup:
@@ -209,13 +210,23 @@ def time_keyboard(kind: str) -> InlineKeyboardMarkup:
     ]])
 
 
-def duration_keyboard(task_id: int) -> InlineKeyboardMarkup:
+def city_button(webapp_url: str, building: str = "", text: str = "🏙 ببین تو شهر") -> InlineKeyboardButton | None:
+    """Opens the Mini App, on one building's new floor when given."""
+    if not webapp_url:
+        return None
+    return InlineKeyboardButton(text, web_app=WebAppInfo(url=f"{webapp_url}/?b={building}" if building else webapp_url))
+
+
+def duration_keyboard(task_id: int, see: InlineKeyboardButton | None = None) -> InlineKeyboardMarkup:
     options = [15, 30, 45, 60, 90, 120]
-    return InlineKeyboardMarkup([
+    rows = [
         [InlineKeyboardButton(f"{m}′", callback_data=f"m:{task_id}:{m}") for m in options[:3]],
         [InlineKeyboardButton(f"{m}′", callback_data=f"m:{task_id}:{m}") for m in options[3:]]
         + [InlineKeyboardButton("رد", callback_data=f"m:{task_id}:0")],
-    ])
+    ]
+    if see:
+        rows.insert(0, [see])
+    return InlineKeyboardMarkup(rows)
 
 
 class Bot:
@@ -525,7 +536,7 @@ class Bot:
             await query.message.reply_text(
                 f"✅ {task.title}\n{label(task.building)} یه طبقه بالاتر رفت."
                 + (f"\n🏛 {step}" if step else "") + "\nچقدر طول کشید؟",
-                reply_markup=duration_keyboard(task_id),
+                reply_markup=duration_keyboard(task_id, city_button(self.cfg.webapp_url, task.building)),
             )
         elif action == "s":
             when = self.city.snooze(task_id, rest[0], now)
@@ -586,7 +597,9 @@ class Bot:
             if minutes:
                 self.city.set_duration(task_id, minutes)
             await query.answer("ثبت شد" if minutes else "باشه")
-            await query.edit_message_reply_markup(None)
+            keep = [row for row in query.message.reply_markup.inline_keyboard if row[0].web_app] \
+                if query.message.reply_markup else []
+            await query.edit_message_reply_markup(InlineKeyboardMarkup(keep) if keep else None)
 
     async def focus_next(self, message) -> None:
         """Filming or editing mode: one piece at a time with its script, then City Hall's wrap-up."""
@@ -622,6 +635,9 @@ class Bot:
             log.exception("tick failed")
             return
         for m in messages:
+            if m.postcard:
+                await self.send_postcard(ctx.bot, chat_id, m.text)
+                continue
             markup = None
             if m.task_id:
                 markup = stuck_keyboard(m.task_id) if m.stuck else task_keyboard(m.task_id)
@@ -630,6 +646,24 @@ class Bot:
             elif m.start_kind:
                 markup = start_keyboard(m.start_kind)
             await ctx.bot.send_message(chat_id, m.text, reply_markup=markup)
+
+
+    async def send_postcard(self, bot, chat_id: int, caption: str) -> None:
+        """The morning picture of the city, with a button that opens it; text only if it can't be drawn."""
+        now = now_utc()
+        floors, dark = self.city.floors(), self.city.dark_days(now)
+        picture = await asyncio.to_thread(postcard.render, [
+            {"key": k, "floors": n, "dark": dark.get(k, 0) >= 3} for k, n in floors.items()
+        ])
+        see = city_button(self.cfg.webapp_url, text="🏙 باز کردن شهر")
+        markup = InlineKeyboardMarkup([[see]]) if see else None
+        try:
+            if picture:
+                await bot.send_photo(chat_id, picture, caption=caption, reply_markup=markup)
+                return
+        except Exception:  # noqa: BLE001 - never lose the morning message over the picture
+            log.exception("postcard: sending the picture failed")
+        await bot.send_message(chat_id, caption, reply_markup=markup)
 
 
 def main() -> None:
@@ -654,13 +688,15 @@ def main() -> None:
                                      send_login, cfg.site_url)
         if cfg.webapp_url:
             await app.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(text="🏙 شهر", web_app=WebAppInfo(url=cfg.webapp_url))
+                menu_button=MenuButtonWebApp(text="🏙 شهر من", web_app=WebAppInfo(url=cfg.webapp_url))
             )
-        version = "3" if cfg.webapp_url else "3-text"  # bump when the menu's buttons change
+        version = "4" if cfg.webapp_url else "3-text"  # bump when the menu's buttons change
         if bot.owner_id() and bot.db.get_state("menu_version") != version:
             bot.db.set_state("menu_version", version)
-            text = ("🏛 تالار شهر آپدیت شد: دکمه «📣 برنامه مارکتینگ» متن آماده چت مارکتینگ هر برند رو می‌ده. "
-                    "جوابشون رو که بفرستی، خودم کارها رو بین Media Hub و بقیه ساختمون‌ها پخش می‌کنم.")
+            text = ("🏛 تالار شهر آپدیت شد: هر صبح یه عکس از شهرت می‌فرستم، بعد هر کاری که تیک بزنی "
+                    "دکمه «🏙 ببین تو شهر» طبقه‌ی تازه رو نشونت می‌ده، و «🏙 شهر من» همیشه پایین چته."
+                    if cfg.webapp_url else
+                    "🏛 تالار شهر آپدیت شد: دکمه «📣 برنامه مارکتینگ» متن آماده چت مارکتینگ هر برند رو می‌ده.")
             await app.bot.send_message(bot.owner_id(), text, reply_markup=bot.menu_markup)
 
     async def post_shutdown(app: Application) -> None:
