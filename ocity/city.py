@@ -781,7 +781,8 @@ class CityHall:
             stage = step.kind if step else ("publish" if c.board == "today" else "filming")
             cards.append({"id": c.id, "task": (step or c).id, "title": c.title.replace("📤 انتشار ", "", 1),
                           "brand": c.brand, "stage": stage, "publish": c.due_date,
-                          "due": (step or c).due_date, "prep": "content_prep" in mine})
+                          "due": (step or c).due_date, "prep": "content_prep" in mine,
+                          "script": ((step.notes if step else None) or c.notes or "")[:3000] or None})
         today = self.local(now).date().isoformat()
         stories = [{"id": t.id, "title": t.title.replace("📱 استوری ", "", 1), "brand": t.brand, "due": t.due_date}
                    for t in open_ if t.kind == "story" and (t.due_date or today) >= today]
@@ -1281,7 +1282,8 @@ class CityHall:
                 "id": t.id, "title": t.title, "building": t.building, "board": t.board,
                 "due_date": t.due_date, "due_time": t.due_time,
                 "overdue": bool(t.due_date and t.due_date < today and t.board == "today"),
-                "staff": bool(t.delegated), "script": bool(t.notes), "high": t.priority == "high",
+                "staff": bool(t.delegated), "script": bool(t.notes), "notes": (t.notes or "")[:3000] or None,
+                "high": t.priority == "high",
                 "kind": t.kind, "brand": t.brand,
             }
 

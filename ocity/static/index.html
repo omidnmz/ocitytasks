@@ -202,6 +202,8 @@
   .err { padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.8; }
   .bld.spot { animation: spot 1.3s ease-in-out 4; }
   @keyframes spot { 50% { filter: drop-shadow(0 0 12px #facc15) brightness(1.18); } }
+  .script { white-space: pre-wrap; line-height: 1.9; font-size: 14px; background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.25);
+    border-radius: 14px; padding: 12px 14px; margin: 6px 0 12px; max-height: 55vh; overflow: auto; }
 </style>
 </head>
 <body>
@@ -942,7 +944,6 @@ function card(t, opts = {}) {
   if (t.due_time) meta.push(`<span>🕒 ${fa(t.due_time)}</span>`);
   if (t.staff) meta.push(`<span>👥 پرسنل</span>`);
   if (t.board === "waiting") meta.push(`<span>⏳ در انتظار</span>`);
-  if (t.script) meta.push(`<span>📝 سناریو</span>`);
   const KB = {filming:"🎥 ضبط", editing:"✂️ تدوین", story:"📱 استوری", mkt_plan:"📣 برنامه", content_prep:"🧰 آماده‌سازی", publish:"🚀 انتشار"};
   if (KB[t.kind]) meta.push(`<span>${KB[t.kind]}</span>`);
   return `<div class="card" data-id="${t.id}" style="--bc:${t.overdue ? "var(--danger)" : color(t.building)}">
@@ -950,6 +951,7 @@ function card(t, opts = {}) {
     ${meta.length ? `<div class="meta">${meta.join("")}</div>` : ""}
     <div class="acts">
       <button class="b main" data-a="done">✅ انجام شد</button>
+      ${t.notes ? `<button class="b" data-a="script">📝 سناریو</button>` : ""}
       <button class="b" data-a="later">⏰ بعداً</button>
       <button class="b" data-a="more">⋯</button>
     </div></div>`;
@@ -1094,9 +1096,12 @@ function mediaBoard() {
 
 function bindMedia() {
   $("sheet").querySelectorAll("[data-t]").forEach((el) => el.onclick = () => {
-    const id = +el.dataset.t;
-    choose(esc(el.textContent.trim()), [["done", "✅ انجام شد"], ["later", "⏰ بعداً"], ["more", "⋯ بیشتر"]],
-      (v) => cardAction(id, v));
+    const id = +el.dataset.t, M = S.media || { cards: [] };
+    const c = M.cards.find((x) => x.task === id);
+    const title = c ? esc(c.title) : esc(el.textContent.trim());
+    choose(title, [["done", c && c.stage === "filming" ? "✅ ضبط شد" : "✅ انجام شد"], ["later", "⏰ بعداً"], ["more", "⋯ بیشتر"]],
+      (v) => cardAction(id, v), c && c.script ? scriptBox(c.script)
+        : c && c.stage === "filming" ? `<div class="note">برای این ریل هنوز سناریویی نیومده. سناریو از برنامه‌ی برج مارکتینگ میاد.</div>` : "");
   });
   const st = $("set-times");
   if (st) st.onclick = (e) => { e.preventDefault(); askTimes(["filming", "editing", "publish", "story"]); };
@@ -1170,8 +1175,9 @@ function celebrate() {
 }
 $("sheet-bg").onclick = closeSheet;
 
-function choose(title, options, done) {
-  sheet(`<h3>${title}</h3><div class="chips">` +
+const scriptBox = (text) => text ? `<div class="script"><b>📝 سناریو</b>\n${esc(text)}</div>` : "";
+function choose(title, options, done, extra = "") {
+  sheet(`<h3>${title}</h3>${extra}<div class="chips">` +
     options.map(([v, l]) => `<button class="chip" data-v="${v}">${l}</button>`).join("") + "</div>");
   $("sheet").querySelectorAll(".chip").forEach((c) => c.onclick = () => { closeSheet(); done(c.dataset.v); });
 }
@@ -1186,6 +1192,10 @@ async function act(id, action, body) {
 
 function cardAction(id, a) {
   if (a === "done") return act(id, "done");
+  if (a === "script") {
+    const t = [...S.today, ...S.buildings.flatMap((b) => b.tasks || [])].find((x) => x.id === id);
+    return choose(esc(t ? t.title : ""), [["done", "✅ انجام شد"], ["later", "⏰ بعداً"]], (v) => cardAction(id, v), scriptBox(t && t.notes));
+  }
   if (a === "later") return choose("کی دوباره بپرسم؟",
     [["30", "۳۰ دقیقه"], ["60", "یه ساعت"], ["tonight", "امشب"], ["tomorrow", "فردا"]],
     (v) => act(id, "snooze", { option: v }));
