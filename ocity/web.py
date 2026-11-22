@@ -191,6 +191,10 @@ def make_app(city: CityHall, token: str, owner_id, notify=None, site_url: str = 
         elif action == "drop":
             city.drop(task_id, now)
             message = "🗑 حذف شد"
+        elif action == "undo":
+            if city.undo(task_id, now) is None:
+                return web.json_response({"error": "not undoable"}, status=400)
+            message = "↩️ برگشت به کارهای باز"
         elif action == "building" and body.get("building") in BUILDINGS:
             city.set_building(task_id, body["building"])
             message = "🏷 ساختمونش عوض شد"

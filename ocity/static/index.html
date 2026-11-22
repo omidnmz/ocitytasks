@@ -204,6 +204,12 @@
   @keyframes spot { 50% { filter: drop-shadow(0 0 12px #facc15) brightness(1.18); } }
   .script { white-space: pre-wrap; line-height: 1.9; font-size: 14px; background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.25);
     border-radius: 14px; padding: 12px 14px; margin: 6px 0 12px; max-height: 55vh; overflow: auto; }
+  .toast.act { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+  .toast .undo { margin-inline-start: auto; background: #fff; color: #0f172a; border: 0; border-radius: 10px; padding: 6px 12px; font: inherit; font-weight: 700; }
+  .hist-btn { display: block; margin: 10px auto 0; }
+  .hday { font-weight: 800; font-size: 13px; color: var(--muted); margin: 14px 4px 6px; }
+  .hrow { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid rgba(148,163,184,.18); }
+  .hrow .ht { flex: 1; min-width: 0; font-size: 14px; } .hrow .ht small { color: var(--muted); font-size: 11.5px; }
 </style>
 </head>
 <body>
@@ -292,9 +298,15 @@ async function api(path, body) {
   return r.json();
 }
 
-function toast(msg) {
+function toast(msg, undoId) {
   const t = $("toast"); t.textContent = msg; t.classList.add("on");
-  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 2300);
+  t.classList.toggle("act", !!undoId);
+  if (undoId) {   // a mistake is one tap away from being taken back
+    const u = document.createElement("button"); u.className = "undo"; u.textContent = "↩️ برگردون";
+    u.onclick = () => { t.classList.remove("on", "act"); act(undoId, "undo"); };
+    t.appendChild(u);
+  }
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on", "act"), undoId ? 6000 : 2300);
 }
 
 async function load() {
@@ -969,7 +981,9 @@ function drawToday() {
   $("today").innerHTML = `<h2>📌 کارهای امروز (${fa(items.length)})</h2>` +
     (items.length ? items.map((t) => card(t)).join("")
       : '<div class="empty"><b>🎉</b>امروز کاری نمونده.<br>یه ساختمون رو توی شهر انتخاب کن و قدم بعدیش رو بردار.</div>') +
-    `<div class="legend">${fa(esc(S.streak_line))}${S.buffer_line ? "<br>" + fa(esc(S.buffer_line)) : ""}</div>`;
+    `<div class="legend">${fa(esc(S.streak_line))}${S.buffer_line ? "<br>" + fa(esc(S.buffer_line)) : ""}</div>` +
+    `<button class="b hist-btn" id="hist">🕘 تاریخچه</button>`;
+  $("hist").onclick = showHistory;
   bindCards($("today"));
 }
 
@@ -1186,8 +1200,22 @@ async function act(id, action, body) {
   try {
     const r = await api(`/api/task/${id}/${action}`, body || {});
     if (action === "done") { celebrate(); if (tg) tg.HapticFeedback.notificationOccurred("success"); }
-    toast(r.message); closeSheet(); await load();
+    toast(r.message, action === "done" || action === "drop" ? id : null); closeSheet(); await load();
   } catch (e) { toast("نشد، دوباره امتحان کن."); }
+}
+
+function showHistory() {
+  const H = S.history || [], days = {};
+  for (const h of H) (days[h.at.slice(0, 10)] = days[h.at.slice(0, 10)] || []).push(h);
+  const label = (d) => d === S.date ? "امروز" : shortDay(d);
+  sheet(`<h3>🕘 تاریخچه</h3>` + (H.length ? Object.entries(days).map(([d, list]) => `<div class="hday">${label(d)}</div>` +
+    list.map((h) => { const b = bmap()[h.building] || { emoji: "" };
+      return `<div class="hrow"><span class="hs">${h.status === "done" ? "✅" : "🗑"}</span>
+        <div class="ht"><div>${esc(h.title)}</div><small>${b.emoji} ${esc(b.name || "")} • ${fa(h.at.slice(11))}</small></div>
+        <button class="b" data-u="${h.id}">↩️</button></div>`; }).join("")).join("")
+    : '<div class="empty">هنوز کاری انجام نشده.</div>') +
+    `<div class="legend">↩️ هر کار رو برمی‌گردونه به کارهای باز؛ اگه انجام‌شده بود، طبقه‌اش هم برداشته می‌شه.</div>`);
+  $("sheet").querySelectorAll("[data-u]").forEach((el) => el.onclick = () => act(+el.dataset.u, "undo"));
 }
 
 function cardAction(id, a) {
