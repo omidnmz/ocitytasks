@@ -827,6 +827,29 @@ class CityHall:
         self.db.update_task(task_id, status="dropped", next_nudge_at=None)
         self.db.log(task_id, "dropped", now=now)
 
+    def undo(self, task_id: int, now: datetime) -> Task | None:
+        """Bring a finished or removed task back to the open list; its floor comes off with it.
+        A filmed piece also takes back the editing step it opened, if that hasn't been touched."""
+        task = self.db.get_task(task_id)
+        if task is None or task.status == "open":
+            return None
+        if task.status == "done" and task.kind == "filming" and task.link_id:
+            for t in self.db.open_tasks():
+                if t.kind == "editing" and t.link_id == task.link_id and not t.postpone_count:
+                    self.db.update_task(t.id, status="dropped", next_nudge_at=None)
+        self.db.update_task(task_id, status="open", done_at=None)
+        task = self.db.get_task(task_id)
+        nudge = self.first_nudge(task, now)
+        if nudge:
+            self.db.update_task(task_id, next_nudge_at=nudge)
+        self.db.log(task_id, "undone", now=now, was=task.status)
+        return self.db.get_task(task_id)
+
+    def history(self, now: datetime, limit: int = 40) -> list[dict]:
+        return [{"id": t.id, "title": t.title, "building": t.building, "status": t.status,
+                 "at": self.local(parse_iso(at)).strftime("%Y-%m-%d %H:%M")}
+                for t, at in self.db.history(limit) if t.building in BUILDINGS]
+
     def block(self, task_id: int, now: datetime) -> None:
         self.db.update_task(task_id, board="waiting", next_nudge_at=None)
         self.db.log(task_id, "blocked", now=now)
@@ -1319,6 +1342,7 @@ class CityHall:
             "buffer": self.content_buffer(now) if has_content else None,
             "buffer_line": self.buffer_line(now) if has_content else None,
             "date": today,
+            "history": self.history(now),
         }
 
     def all_view(self, now: datetime) -> str:

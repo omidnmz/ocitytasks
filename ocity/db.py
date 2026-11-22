@@ -202,6 +202,21 @@ class DB:
         rows = self.conn.execute("SELECT * FROM tasks WHERE status='done'").fetchall()
         return [Task(**dict(r)) for r in rows]
 
+    def history(self, limit: int = 40) -> list[tuple[Task, str]]:
+        """Tasks most recently finished or removed, each with when that happened, newest first."""
+        rows = self.conn.execute(
+            "SELECT t.*, MAX(e.at) AS happened FROM events e JOIN tasks t ON t.id = e.task_id "
+            "WHERE e.type IN ('done', 'dropped') AND t.status IN ('done', 'dropped') "
+            "GROUP BY t.id ORDER BY happened DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            happened = d.pop("happened")
+            out.append((Task(**d), happened))
+        return out
+
     def floors_by_building(self) -> dict[str, int]:
         rows = self.conn.execute(
             "SELECT building, COUNT(*) AS n FROM tasks WHERE status='done' GROUP BY building"

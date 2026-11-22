@@ -224,8 +224,8 @@ def duration_keyboard(task_id: int, see: InlineKeyboardButton | None = None) -> 
         [InlineKeyboardButton(f"{m}′", callback_data=f"m:{task_id}:{m}") for m in options[3:]]
         + [InlineKeyboardButton("رد", callback_data=f"m:{task_id}:0")],
     ]
-    if see:
-        rows.insert(0, [see])
+    rows.insert(0, [see, InlineKeyboardButton("↩️ برگردون", callback_data=f"u:{task_id}")] if see
+                else [InlineKeyboardButton("↩️ برگردون", callback_data=f"u:{task_id}")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -514,6 +514,13 @@ class Bot:
             await query.answer("این کار پیدا نشد")
             return
         now = now_utc()
+        if action == "u":
+            back = self.city.undo(task_id, now)
+            await query.answer("برگشت به کارهای باز ↩️" if back else "این کار باز بود")
+            if back:
+                await query.edit_message_text(f"↩️ {task.title}\nبرگشت به کارهای باز، طبقه‌اش هم برداشته شد.",
+                                              reply_markup=task_keyboard(task_id))
+            return
         if action in ("n", "p"):
             if self.focus is None:
                 self.focus = {"kind": task.kind, "done": 0, "skipped": set()}
@@ -597,7 +604,8 @@ class Bot:
             if minutes:
                 self.city.set_duration(task_id, minutes)
             await query.answer("ثبت شد" if minutes else "باشه")
-            keep = [row for row in query.message.reply_markup.inline_keyboard if row[0].web_app] \
+            keep = [row for row in query.message.reply_markup.inline_keyboard
+                    if row[0].web_app or row[-1].callback_data == f"u:{task_id}"] \
                 if query.message.reply_markup else []
             await query.edit_message_reply_markup(InlineKeyboardMarkup(keep) if keep else None)
 

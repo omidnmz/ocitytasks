@@ -544,3 +544,29 @@ def test_postcard_picture_draws_every_tower():
                            {"key": "vault", "floors": 0, "dark": False}, {"key": "custom1", "floors": 4, "dark": False}])
     assert jpg and jpg[:3] == b"\xff\xd8\xff"
     assert postcard.render([{"key": "vault", "floors": 0, "dark": False}]) is None
+
+
+def test_undo_brings_a_done_task_back_and_takes_its_floor(city):
+    t = city.add("call supplier", "retail", now=at(2, 9))
+    before = city.floors()["retail"]
+    city.done(t.id, at(2, 10))
+    assert city.floors()["retail"] == before + 1
+    assert city.history(at(2, 11))[0]["id"] == t.id
+    back = city.undo(t.id, at(2, 11))
+    assert back.status == "open" and back.done_at is None
+    assert city.floors()["retail"] == before
+    assert city.history(at(2, 11)) == []
+    assert city.undo(t.id, at(2, 12)) is None  # already open
+
+
+def test_undo_a_drop_and_a_filmed_piece_takes_back_its_editing_step(city):
+    gone = city.add("old idea", "vault", now=at(2, 9))
+    city.drop(gone.id, at(2, 9))
+    assert city.history(at(2, 10))[0]["status"] == "dropped"
+    assert city.undo(gone.id, at(2, 10)).status == "open"
+    card = city.add("📤 انتشار ریل", "media", now=at(2, 9), kind="publish", due_date="2026-11-06", board="construction")
+    film = city.add("🎥 ضبط ریل", "media", now=at(2, 9), kind="filming", link_id=card.id)
+    city.done(film.id, at(3, 11))
+    assert [t for t in city.db.open_tasks() if t.kind == "editing"]
+    city.undo(film.id, at(3, 12))
+    assert not [t for t in city.db.open_tasks() if t.kind == "editing"]
