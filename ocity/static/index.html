@@ -202,8 +202,11 @@
   .err { padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.8; }
   .bld.spot { animation: spot 1.3s ease-in-out 4; }
   @keyframes spot { 50% { filter: drop-shadow(0 0 12px #facc15) brightness(1.18); } }
-  .script { white-space: pre-wrap; line-height: 1.9; font-size: 14px; background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.25);
-    border-radius: 14px; padding: 12px 14px; margin: 6px 0 12px; max-height: 55vh; overflow: auto; }
+  .script { line-height: 1.95; font-size: 15.5px; background: rgba(139,92,246,.07); border: 1px solid rgba(139,92,246,.22);
+    border-radius: 16px; padding: 14px 16px; margin: 6px 0 14px; }
+  .script .sh { font-weight: 800; font-size: 13px; color: #7c3aed; margin-bottom: 6px; }
+  .script p { margin: 0 0 8px; white-space: pre-wrap; } .script p:last-child { margin: 0; }
+  .script b { color: #6d28d9; }
   .toast.act { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
   .toast .undo { margin-inline-start: auto; background: #fff; color: #0f172a; border: 0; border-radius: 10px; padding: 6px 12px; font: inherit; font-weight: 700; }
   .hist-btn { display: block; margin: 10px auto 0; }
@@ -1189,7 +1192,12 @@ function celebrate() {
 }
 $("sheet-bg").onclick = closeSheet;
 
-const scriptBox = (text) => text ? `<div class="script"><b>📝 سناریو</b>\n${esc(text)}</div>` : "";
+// the reel's script, line by line; a line that opens with a label («🎬 هوک:») gets the label in bold
+const scriptBox = (text) => text ? `<div class="script"><div class="sh">📝 سناریو</div>` + text.split("\n").map((l) => {
+  if (!l.trim()) return "";
+  const m = l.match(/^([^:：]{1,32}[:：])\s*(.*)$/);
+  return m ? `<p><b>${esc(m[1])}</b> ${esc(m[2])}</p>` : `<p>${esc(l)}</p>`;
+}).join("") + `</div>` : "";
 function choose(title, options, done, extra = "") {
   sheet(`<h3>${title}</h3>${extra}<div class="chips">` +
     options.map(([v, l]) => `<button class="chip" data-v="${v}">${l}</button>`).join("") + "</div>");
