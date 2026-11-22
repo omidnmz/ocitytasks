@@ -570,3 +570,24 @@ def test_undo_a_drop_and_a_filmed_piece_takes_back_its_editing_step(city):
     assert [t for t in city.db.open_tasks() if t.kind == "editing"]
     city.undo(film.id, at(3, 12))
     assert not [t for t in city.db.open_tasks() if t.kind == "editing"]
+
+
+def test_a_reel_keeps_its_full_multiline_script():
+    from ocity import pipeline
+    plan = pipeline.parse("""#برند: کراکس
+[ریلز]
+2026-11-25 | راهنمای سایز | ریل | جفت مشکی
+سناریو:
+🎬 هوک: «سایزت رو اشتباه می‌خری؟»
+🎥 شات ۱ پا روی خط‌کش
+✍️ کپشن: راهنما | لینک تو بیو
+2026-11-27 | سه رنگ | ریل | شات قدیمی | دیوار
+[کارها]
+پیام به مربی | محصول""")[0]
+    full, old = plan.reels
+    assert full.prep == "جفت مشکی"
+    assert full.script.splitlines() == ["🎬 هوک: «سایزت رو اشتباه می‌خری؟»", "🎥 شات ۱ پا روی خط‌کش",
+                                        "✍️ کپشن: راهنما | لینک تو بیو"]
+    assert (old.script, old.prep) == ("شات قدیمی", "دیوار")
+    assert [a.title for a in plan.tasks] == ["پیام به مربی"]
+    assert "سناریو:" in pipeline.prompt("کراکس", full.day, full.day)
